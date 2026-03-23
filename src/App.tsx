@@ -1,22 +1,19 @@
-import { useEffect, useRef, useState, createContext, useContext } from 'react'
+import { useEffect, useRef, useState, createContext, useContext, useCallback } from 'react'
 import { AnimatedTexture } from './components/AnimatedTexture'
-import { LIGHT_THEME, DARK_THEME, setTextureTheme } from './hooks/useAnimatedTexture'
+import { LIGHT_THEME, DARK_THEME, setTextureTheme, setMousePosition, clearMousePosition } from './hooks/useAnimatedTexture'
 import './App.css'
 
-// Theme context
 const ThemeCtx = createContext<{ dark: boolean; toggle: () => void }>({ dark: true, toggle: () => {} })
 
-// Drawio coordinate system
 const W = 840, H = 2390
 
-// Luxury color palettes
 const palette = {
   light: {
     bg: 'linear-gradient(180deg, #4a7a2e 0%, #2d5a1a 40%, #1a3d0f 70%, #0e2208 100%)',
     road: '#5a3a1a',
     roadOp: 0.85,
-    water: 'rgba(25, 60, 90, 0.45)',
-    water2: 'rgba(20, 50, 80, 0.35)',
+    water: 'rgba(25, 60, 90, 0.55)',
+    water2: 'rgba(20, 50, 80, 0.45)',
     cream: '#f5f0e6',
     gold: '#c9a84c',
     stone: '#b8a88a',
@@ -25,33 +22,40 @@ const palette = {
     verandaBorder: '#a89878',
     verandaText: '#3a3020',
     diamond: 'linear-gradient(135deg, #5a3a1a 0%, #8b6340 50%, #5a3a1a 100%)',
-    stelaGrad: 'linear-gradient(180deg, #f5f0e6 0%, #d4c8b0 40%, #b8a88a 100%)',
+    cardBg: 'rgba(255, 255, 255, 0.15)',
+    cardBorder: 'rgba(255, 255, 255, 0.2)',
     quote: '#c9a84c',
     overlay: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 30%, rgba(0,15,0,0.1) 55%, rgba(0,10,0,0.25) 75%, rgba(0,5,0,0.45) 100%)',
     stream: 'rgba(180, 200, 220, 0.3)',
+    marbleBg: 'linear-gradient(180deg, #f0ece4 0%, #e0d8cc 30%, #d4ccc0 60%, #c8bfb0 100%)',
+    marbleSide: 'linear-gradient(180deg, #b0a590 0%, #8a7d68 50%, #6a5f4c 100%)',
+    marbleText: '#2a2018',
   },
   dark: {
     bg: 'linear-gradient(180deg, #1a2e10 0%, #0f1f08 35%, #080f04 65%, #030802 100%)',
     road: '#3d2810',
     roadOp: 0.7,
-    water: 'rgba(10, 30, 55, 0.55)',
-    water2: 'rgba(8, 25, 45, 0.45)',
+    water: 'rgba(10, 35, 60, 0.65)',
+    water2: 'rgba(8, 30, 50, 0.55)',
     cream: '#e8dcc8',
     gold: '#a8883c',
     stone: '#8a7a60',
     stoneLight: '#b0a088',
-    verandaBg: 'radial-gradient(circle, #2a2418 0%, #1e1a12 50%, #14120c 100%)',
-    verandaBorder: '#4a4030',
-    verandaText: '#d4c8b0',
+    verandaBg: 'radial-gradient(circle, #d4cbb8 0%, #b8a890 30%, #a09078 60%, #887860 100%)',
+    verandaBorder: '#8a7a60',
+    verandaText: '#2a2018',
     diamond: 'linear-gradient(135deg, #2a1a08 0%, #4a3018 50%, #2a1a08 100%)',
-    stelaGrad: 'linear-gradient(180deg, #d4c8b0 0%, #8a7a60 40%, #4a4030 100%)',
+    cardBg: 'rgba(0, 0, 0, 0.25)',
+    cardBorder: 'rgba(0, 0, 0, 0.3)',
     quote: '#a8883c',
     overlay: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 25%, rgba(0,8,0,0.15) 50%, rgba(0,5,0,0.35) 75%, rgba(0,3,0,0.55) 100%)',
     stream: 'rgba(120, 140, 160, 0.15)',
+    marbleBg: 'linear-gradient(180deg, #d4ccc0 0%, #c0b8a8 30%, #a89888 60%, #908070 100%)',
+    marbleSide: 'linear-gradient(180deg, #706050 0%, #504030 50%, #3a2e20 100%)',
+    marbleText: '#f0ece4',
   },
 }
 
-// Catmull-rom to SVG path
 function pts2path(pts: [number, number][]): string {
   if (pts.length < 2) return ''
   let d = `M ${pts[0][0]} ${pts[0][1]}`
@@ -62,14 +66,24 @@ function pts2path(pts: [number, number][]): string {
   return d
 }
 
-// Road now connects to diamond top point: the diamond at (200,1560) 440×440 rotated 45°
-// Top point = (200 + 220, 1560) = (420, 1560)
+// Road: starts from hero, goes right around Направления, left through center,
+// left around Критерии, then center down to diamond top
 const mainRoad: [number, number][] = [
-  [420, 1560], // connect to diamond top
-  [340, 1410], [780, 1250], [840, 870], [420, 950],
-  [40, 850], [20, 560], [300, 430], [560, 480], [630, 620],
-  [640, 460], [420, 380], [424, 317],
+  [424, 317],
+  [420, 380], [640, 460], [630, 620],
+  [560, 480], [300, 430], [20, 560],
+  [40, 850],
+  // Goes RIGHT around Направления (center ~420, y~1100)
+  [420, 950],
+  [750, 1000], [780, 1150], [700, 1250],
+  // Crosses center to left
+  [420, 1300], [150, 1350],
+  // Goes LEFT around Критерии (center ~420, y~1450)
+  [80, 1400], [60, 1500], [150, 1580],
+  // Back to center, down to diamond
+  [300, 1560], [420, 1560],
 ]
+
 const stream: [number, number][] = [
   [580, 858], [500, 880], [360, 890], [240, 870], [130, 810],
   [80, 730], [80, 660], [110, 580], [180, 530], [260, 510],
@@ -87,32 +101,31 @@ const rightTrees = [
   { x: 720, y: 130, s: 150 }, { x: 630, y: 260, s: 210 },
 ]
 
+// Services centered
 const services = [
-  { num: '01', x: -50, y: 1060, name: 'Проектирование', desc: 'Концепция, планировка, 3D-визуализация' },
-  { num: '02', x: 150, y: 1060, name: 'Благоустройство', desc: 'Мощение, подпорные стенки, натуральный камень' },
-  { num: '03', x: 350, y: 1060, name: 'Озеленение', desc: 'Посадка деревьев, формовка ниваки' },
-  { num: '04', x: -50, y: 1260, name: 'Дренажные системы', desc: 'Защита от подтопления и застоя воды' },
-  { num: '05', x: 150, y: 1260, name: 'Системы автополива', desc: 'Интеллектуальный полив с датчиками' },
-  { num: '06', x: -50, y: 1460, name: 'Электрика и освещение', desc: 'Архитектурная подсветка ландшафта' },
-  { num: '07', x: 150, y: 1460, name: 'Геопластика', desc: 'Моделирование рельефа: холмы, террасы' },
+  { num: '01', col: 0, row: 0, name: 'Проектирование', desc: 'Концепция, планировка, 3D-визуализация' },
+  { num: '02', col: 1, row: 0, name: 'Благоустройство', desc: 'Мощение, подпорные стенки, натуральный камень' },
+  { num: '03', col: 2, row: 0, name: 'Озеленение', desc: 'Посадка деревьев, формовка ниваки' },
+  { num: '04', col: 0, row: 1, name: 'Дренажные системы', desc: 'Защита от подтопления и застоя воды' },
+  { num: '05', col: 1, row: 1, name: 'Системы автополива', desc: 'Интеллектуальный полив с датчиками' },
+  { num: '06', col: 0, row: 2, name: 'Электрика и освещение', desc: 'Архитектурная подсветка ландшафта' },
+  { num: '07', col: 1, row: 2, name: 'Геопластика', desc: 'Моделирование рельефа: холмы, террасы' },
 ]
 
 const critItems = [
-  { x: 600, y: 1480, label: 'Полив', sub: 'irrigation', hue: 120, val: 0.95 },
-  { x: 695, y: 1480, label: 'Удобрения', sub: 'nutrition', hue: 80, val: 0.88 },
-  { x: 790, y: 1480, label: 'Здоровье', sub: 'vitality', hue: 160, val: 0.92 },
-  { x: 600, y: 1590, label: 'Дренаж', sub: 'drainage', hue: 200, val: 0.90 },
-  { x: 695, y: 1590, label: 'Дизайн', sub: 'design fit', hue: 35, val: 0.85 },
-  { x: 790, y: 1590, label: 'Освещение', sub: 'lighting', hue: 280, val: 0.87 },
+  { col: 0, row: 0, label: 'Полив', sub: 'irrigation', hue: 120, val: 0.95 },
+  { col: 1, row: 0, label: 'Удобрения', sub: 'nutrition', hue: 80, val: 0.88 },
+  { col: 2, row: 0, label: 'Здоровье', sub: 'vitality', hue: 160, val: 0.92 },
+  { col: 0, row: 1, label: 'Дренаж', sub: 'drainage', hue: 200, val: 0.90 },
+  { col: 1, row: 1, label: 'Дизайн', sub: 'design fit', hue: 35, val: 0.85 },
+  { col: 2, row: 1, label: 'Освещение', sub: 'lighting', hue: 280, val: 0.87 },
 ]
 
-// Compass dots around О нас (center 667.5, 667.5)
-const compassDots: [number, number][] = Array.from({ length: 8 }, (_, i) => {
-  const a = (i / 8) * Math.PI * 2 - Math.PI / 2
+const compassDots: [number, number][] = Array.from({ length: 12 }, (_, i) => {
+  const a = (i / 12) * Math.PI * 2 - Math.PI / 2
   return [667.5 + Math.cos(a) * 118, 667.5 + Math.sin(a) * 118] as [number, number]
 })
 
-// Criteria ring
 function CritRing({ hue, val, size = 80 }: { hue: number; val: number; size?: number }) {
   const { dark } = useContext(ThemeCtx)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -144,7 +157,6 @@ function CritRing({ hue, val, size = 80 }: { hue: number; val: number; size?: nu
   return <canvas ref={canvasRef} style={{ width: size, height: size }} />
 }
 
-// Theme toggle button
 function ThemeToggle() {
   const { dark, toggle } = useContext(ThemeCtx)
   return (
@@ -182,24 +194,55 @@ function App() {
     return () => window.removeEventListener('resize', resize)
   }, [])
 
+  // Mouse tracking for grass crush effect — convert to drawio coordinates
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const container = containerRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / scale
+    const y = (e.clientY - rect.top) / scale
+    setMousePosition(x, y)
+  }, [scale])
+
+  const handleMouseLeave = useCallback(() => {
+    clearMousePosition()
+  }, [])
+
+  // Направления: centered at x=220..620 (3 cols of 190 wide, gap 15)
+  const svcGridLeft = 220
+  const svcColW = 190
+  const svcGap = 15
+  const svcStartY = 1070
+
+  // Критерии: centered at x=240..600 (3 cols of 95 wide, gap 15)
+  const critGridLeft = 262
+  const critColW = 95
+  const critGap = 15
+  const critStartY = 1450
+
   return (
     <ThemeCtx.Provider value={{ dark, toggle }}>
       <ThemeToggle />
-      <div ref={containerRef} style={{
+      <div style={{
         width: '100vw', overflowX: 'hidden',
         transition: 'background 1s ease',
         background: dark ? '#030802' : '#0e2208',
       }}>
-        <div style={{
-          width: W, height: H,
-          position: 'relative',
-          transformOrigin: 'top left',
-          transform: `scale(${scale})`,
-          background: p.bg,
-          overflow: 'visible',
-          transition: 'background 1s ease',
-        }}>
-          {/* Grass texture — wave circles */}
+        <div
+          ref={containerRef}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          style={{
+            width: W, height: H,
+            position: 'relative',
+            transformOrigin: 'top left',
+            transform: `scale(${scale})`,
+            background: p.bg,
+            overflow: 'visible',
+            transition: 'background 1s ease',
+          }}
+        >
+          {/* Grass texture */}
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
             <AnimatedTexture type="grass" density={10} />
           </div>
@@ -212,7 +255,7 @@ function App() {
             transition: 'background 1s ease',
           }} />
 
-          {/* === WATER — deep noble tones === */}
+          {/* === WATER — deep noble dark tones === */}
           <div style={{
             position: 'absolute', left: 100, top: 510,
             width: 535.5, height: 357,
@@ -220,7 +263,7 @@ function App() {
             background: p.water,
             overflow: 'hidden', zIndex: 3,
             transition: 'background 1s ease',
-            boxShadow: 'inset 0 0 60px rgba(0,0,0,0.3)',
+            boxShadow: `inset 0 0 60px rgba(0,0,0,0.4), inset 0 0 120px rgba(0,20,40,0.3)`,
           }}>
             <AnimatedTexture type="water" density={8} />
           </div>
@@ -231,7 +274,7 @@ function App() {
             background: p.water2,
             overflow: 'hidden', zIndex: 3,
             transition: 'background 1s ease',
-            boxShadow: 'inset 0 0 50px rgba(0,0,0,0.25)',
+            boxShadow: `inset 0 0 50px rgba(0,0,0,0.35), inset 0 0 100px rgba(0,20,40,0.25)`,
           }}>
             <AnimatedTexture type="water" density={8} />
           </div>
@@ -294,7 +337,7 @@ function App() {
             </div>
           ))}
 
-          {/* === "О нас" — stone veranda with columns === */}
+          {/* === "О нас" — marble stone veranda with columns === */}
           <div style={{
             position: 'absolute', left: 560, top: 560,
             width: 215, height: 215,
@@ -302,9 +345,9 @@ function App() {
             background: p.verandaBg,
             border: `3px solid ${p.verandaBorder}`,
             boxShadow: `
-              0 0 0 8px ${dark ? 'rgba(30,25,18,0.5)' : 'rgba(180,165,140,0.4)'},
-              0 0 0 12px ${dark ? 'rgba(50,42,30,0.3)' : 'rgba(160,145,120,0.3)'},
-              inset 0 0 30px ${dark ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.1)'},
+              0 0 0 8px ${dark ? 'rgba(160,140,110,0.15)' : 'rgba(180,165,140,0.4)'},
+              0 0 0 12px ${dark ? 'rgba(140,120,90,0.1)' : 'rgba(160,145,120,0.3)'},
+              inset 0 0 30px ${dark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.1)'},
               0 8px 30px rgba(0,0,0,0.3)
             `,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -315,28 +358,33 @@ function App() {
               fontSize: 38, fontWeight: 400,
               color: p.verandaText,
               letterSpacing: '0.05em',
-              textShadow: dark ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
+              textShadow: dark ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
             }}>О нас</span>
           </div>
 
-          {/* Column dots around veranda */}
+          {/* Column dots — marble columns */}
           {compassDots.map(([cx, cy], i) => (
             <div key={`col${i}`} style={{
-              position: 'absolute', left: cx - 14, top: cy - 14,
-              width: 28, height: 28,
+              position: 'absolute', left: cx - 10, top: cy - 10,
+              width: 20, height: 20,
               borderRadius: '50%',
-              background: dark ? 'rgba(60,50,35,0.6)' : 'rgba(200,190,170,0.7)',
-              border: `1px solid ${dark ? 'rgba(80,68,48,0.4)' : 'rgba(160,145,120,0.5)'}`,
-              boxShadow: dark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.1)',
+              background: dark
+                ? 'radial-gradient(circle, #c0b098 0%, #a09078 60%, #887860 100%)'
+                : 'radial-gradient(circle, #e8e0d0 0%, #d4cbb8 60%, #b8a890 100%)',
+              border: `1px solid ${dark ? 'rgba(160,140,110,0.4)' : 'rgba(160,145,120,0.5)'}`,
+              boxShadow: dark
+                ? '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.1)'
+                : '0 2px 6px rgba(0,0,0,0.1), inset 0 1px 2px rgba(255,255,255,0.3)',
               zIndex: 6, transition: 'all 0.8s ease',
             }} />
           ))}
 
-          {/* === About text over water === */}
+          {/* === About text over water — CENTERED === */}
           <div style={{
             position: 'absolute', left: 130, top: 590,
             width: 402, height: 200, zIndex: 6,
-            display: 'flex', alignItems: 'center',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            textAlign: 'center',
           }}>
             <p style={{
               fontFamily: "'Cormorant Garamond', serif",
@@ -351,16 +399,6 @@ function App() {
             </p>
           </div>
 
-          {/* === Направления === */}
-          <div style={{
-            position: 'absolute', left: 120, top: 970,
-            width: 402, height: 80, zIndex: 6,
-            fontFamily: "'Cormorant Garamond', serif",
-            fontSize: 32, fontWeight: 300, color: p.cream,
-            display: 'flex', alignItems: 'center',
-            letterSpacing: '0.05em',
-          }}>Направления</div>
-
           {/* === OAK trees === */}
           {[{ x: 525, y: 885, s: 290, pad: 45 }, { x: 700, y: 933, s: 166, pad: 30 }].map((o, i) => (
             <div key={`oak${i}`} style={{
@@ -374,68 +412,88 @@ function App() {
             </div>
           ))}
 
-          {/* === SERVICE CARDS === */}
-          {services.map((s) => (
-            <div key={s.num} style={{
-              position: 'absolute', left: s.x, top: s.y,
-              width: 180, height: 180,
-              borderRadius: 15, overflow: 'hidden', zIndex: 6,
-              border: `1px solid ${dark ? 'rgba(80,65,40,0.3)' : 'rgba(100,85,55,0.25)'}`,
-              boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-            }}>
-              <AnimatedTexture type="grass" density={12} />
-              <div style={{
-                position: 'relative', zIndex: 3,
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                height: '100%', padding: '16px 12px', textAlign: 'center',
-              }}>
-                <span style={{
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontSize: 26, color: p.gold, opacity: 0.6,
-                }}>{s.num}</span>
-                <span style={{
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontSize: 15, color: p.cream,
-                  marginTop: 4, fontWeight: 400,
-                }}>{s.name}</span>
-                <span style={{
-                  fontFamily: "'Inter', sans-serif",
-                  fontSize: 9, color: p.stone, opacity: 0.7,
-                  marginTop: 6, lineHeight: 1.4,
-                }}>{s.desc}</span>
-              </div>
-            </div>
-          ))}
-
-          {/* === Критерии качества === */}
+          {/* === Направления — CENTERED === */}
           <div style={{
-            position: 'absolute', left: 534, top: 1380,
-            width: 402, height: 80, zIndex: 6,
+            position: 'absolute', left: 0, top: 975,
+            width: W, zIndex: 6,
             fontFamily: "'Cormorant Garamond', serif",
             fontSize: 32, fontWeight: 300, color: p.cream,
-            display: 'flex', alignItems: 'center',
+            display: 'flex', justifyContent: 'center',
+            letterSpacing: '0.05em',
+          }}>Направления</div>
+
+          {/* === SERVICE CARDS — centered grid, semi-transparent === */}
+          {services.map((s) => {
+            const x = svcGridLeft + s.col * (svcColW + svcGap)
+            const y = svcStartY + s.row * (svcColW + svcGap)
+            return (
+              <div key={s.num} style={{
+                position: 'absolute', left: x, top: y,
+                width: svcColW, height: svcColW,
+                borderRadius: 15, overflow: 'hidden', zIndex: 6,
+                background: p.cardBg,
+                backdropFilter: 'blur(4px)',
+                border: `1px solid ${p.cardBorder}`,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+                transition: 'all 0.8s ease',
+              }}>
+                <div style={{
+                  position: 'relative', zIndex: 3,
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  height: '100%', padding: '16px 12px', textAlign: 'center',
+                }}>
+                  <span style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 26, color: p.gold, opacity: 0.6,
+                  }}>{s.num}</span>
+                  <span style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 15, color: p.cream,
+                    marginTop: 4, fontWeight: 400,
+                  }}>{s.name}</span>
+                  <span style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: 9, color: p.stone, opacity: 0.7,
+                    marginTop: 6, lineHeight: 1.4,
+                  }}>{s.desc}</span>
+                </div>
+              </div>
+            )
+          })}
+
+          {/* === Критерии качества — CENTERED === */}
+          <div style={{
+            position: 'absolute', left: 0, top: 1370,
+            width: W, zIndex: 6,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 32, fontWeight: 300, color: p.cream,
+            display: 'flex', justifyContent: 'center',
             letterSpacing: '0.05em',
           }}>Критерии качества</div>
 
-          {critItems.map((c, i) => (
-            <div key={`crit${i}`} style={{
-              position: 'absolute', left: c.x, top: c.y,
-              width: 80, height: 108, zIndex: 6, textAlign: 'center',
-            }}>
-              <CritRing hue={c.hue} val={c.val} size={80} />
-              <div style={{
-                fontFamily: "'Cormorant Garamond', serif",
-                fontSize: 11, color: p.cream, marginTop: 2,
-              }}>{c.label}</div>
-              <div style={{
-                fontSize: 8, color: p.stone, opacity: 0.5,
-                letterSpacing: '0.1em', textTransform: 'uppercase',
-              }}>{c.sub}</div>
-            </div>
-          ))}
+          {critItems.map((c, i) => {
+            const x = critGridLeft + c.col * (critColW + critGap)
+            const y = critStartY + c.row * 110
+            return (
+              <div key={`crit${i}`} style={{
+                position: 'absolute', left: x, top: y,
+                width: critColW, height: 108, zIndex: 6, textAlign: 'center',
+              }}>
+                <CritRing hue={c.hue} val={c.val} size={80} />
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 11, color: p.cream, marginTop: 2,
+                }}>{c.label}</div>
+                <div style={{
+                  fontSize: 8, color: p.stone, opacity: 0.5,
+                  letterSpacing: '0.1em', textTransform: 'uppercase',
+                }}>{c.sub}</div>
+              </div>
+            )
+          })}
 
-          {/* === Diamond (road connects to top point) === */}
+          {/* === Diamond === */}
           <div style={{
             position: 'absolute', left: 200, top: 1560,
             width: 440, height: 440,
@@ -464,63 +522,68 @@ function App() {
             }}>Расскажите о вашем участке — мы предложим решение</div>
           </div>
 
-          {/* === СТЕЛЛА-ПАМЯТНИК (СВЯЗАТЬСЯ) === */}
+          {/* === СВЯЗАТЬСЯ — marble monolith, NO border-radius === */}
           <div style={{
-            position: 'absolute', left: 340, top: 1820,
-            width: 160, height: 80, zIndex: 6,
+            position: 'absolute', left: 300, top: 1830,
+            width: 240, zIndex: 6,
             display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
+            alignItems: 'center',
           }}>
-            {/* Stela shape: tapered stone */}
+            {/* Main stone face — large, illuminated */}
             <a href="tel:+79263207755" style={{
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              width: 140, height: 70,
-              background: p.stelaGrad,
-              borderRadius: '4px 4px 2px 2px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 240, height: 70,
+              background: p.marbleBg,
+              borderRadius: 0,
               textDecoration: 'none',
               boxShadow: `
-                0 4px 20px rgba(0,0,0,0.3),
-                inset 0 1px 0 ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.4)'}
+                0 2px 15px rgba(0,0,0,0.25),
+                inset 0 1px 0 rgba(255,255,255,0.3),
+                inset 0 -1px 0 rgba(0,0,0,0.1)
               `,
-              border: `1px solid ${dark ? 'rgba(120,100,70,0.4)' : 'rgba(180,165,140,0.6)'}`,
               transition: 'all 0.8s ease',
+              // Marble veining via repeating gradients
+              backgroundImage: `
+                ${p.marbleBg},
+                repeating-linear-gradient(
+                  120deg,
+                  transparent 0px,
+                  transparent 20px,
+                  rgba(180,170,150,0.08) 20px,
+                  rgba(180,170,150,0.08) 21px
+                )
+              `,
             }}>
-              {/* Decorative top line */}
-              <div style={{
-                width: 40, height: 1,
-                background: p.gold, opacity: 0.5,
-                marginBottom: 6,
-              }} />
               <span style={{
                 fontFamily: "'Cormorant Garamond', serif",
-                fontWeight: 600, fontSize: 14,
-                letterSpacing: '0.25em',
-                color: dark ? '#d4c8b0' : '#3a3020',
+                fontWeight: 600, fontSize: 18,
+                letterSpacing: '0.3em',
+                color: p.marbleText,
               }}>СВЯЗАТЬСЯ</span>
-              <span style={{
-                fontSize: 9, marginTop: 3,
-                color: dark ? '#8a7a60' : '#666',
-                letterSpacing: '0.1em',
-              }}>+7 926 320-77-55</span>
-              {/* Decorative bottom line */}
-              <div style={{
-                width: 25, height: 1,
-                background: p.gold, opacity: 0.3,
-                marginTop: 6,
-              }} />
             </a>
-            {/* Stela base */}
+            {/* Shadow side — darker marble, phone number */}
             <div style={{
-              width: 100, height: 4,
-              background: dark ? 'rgba(80,68,48,0.5)' : 'rgba(160,145,120,0.6)',
-              borderRadius: 1, marginTop: 2,
-            }} />
-            <div style={{
-              width: 120, height: 3,
-              background: dark ? 'rgba(60,50,35,0.4)' : 'rgba(140,125,100,0.5)',
-              borderRadius: 1, marginTop: 1,
-            }} />
+              width: 240, height: 24,
+              background: p.marbleSide,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backgroundImage: `
+                ${p.marbleSide},
+                repeating-linear-gradient(
+                  120deg,
+                  transparent 0px,
+                  transparent 15px,
+                  rgba(0,0,0,0.05) 15px,
+                  rgba(0,0,0,0.05) 16px
+                )
+              `,
+              transition: 'all 0.8s ease',
+            }}>
+              <span style={{
+                fontSize: 10, letterSpacing: '0.15em',
+                color: dark ? 'rgba(200,190,170,0.7)' : 'rgba(255,250,240,0.8)',
+                fontFamily: "'Cormorant Garamond', serif",
+              }}>+7 926 320-77-55</span>
+            </div>
           </div>
 
           {/* === Philosophy quote === */}

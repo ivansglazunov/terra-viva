@@ -14,8 +14,8 @@ interface Dot {
 }
 
 export interface ThemeColors {
-  grassHue: [number, number]    // [base, range]
-  grassLight: [number, number]  // [base, range]
+  grassHue: [number, number]
+  grassLight: [number, number]
   waterHue: number
   waterLight: [number, number]
   treeLight: [number, number]
@@ -46,9 +46,62 @@ export const DARK_THEME: ThemeColors = {
   roofLight: [8, 5],
 }
 
-// Global theme ref for canvas draw functions
 let currentTheme: ThemeColors = DARK_THEME
 export function setTextureTheme(t: ThemeColors) { currentTheme = t }
+
+// --- Global mouse tracking for interactive effects ---
+interface MouseTrail {
+  x: number
+  y: number
+  t: number // timestamp
+}
+
+const mouseState = {
+  x: -9999,
+  y: -9999,
+  active: false,
+  trail: [] as MouseTrail[],
+  trailMaxAge: 1200, // ms for trail to fade
+}
+
+export function setMousePosition(x: number, y: number) {
+  mouseState.x = x
+  mouseState.y = y
+  mouseState.active = true
+  const now = performance.now()
+  mouseState.trail.push({ x, y, t: now })
+  // Keep only recent trail points
+  while (mouseState.trail.length > 0 && now - mouseState.trail[0].t > mouseState.trailMaxAge) {
+    mouseState.trail.shift()
+  }
+}
+
+export function clearMousePosition() {
+  mouseState.active = false
+}
+
+// Per-canvas mouse tracking for water
+const waterMouseState = {
+  x: -9999,
+  y: -9999,
+  active: false,
+  trail: [] as MouseTrail[],
+}
+
+export function setWaterMouse(x: number, y: number) {
+  waterMouseState.x = x
+  waterMouseState.y = y
+  waterMouseState.active = true
+  const now = performance.now()
+  waterMouseState.trail.push({ x, y, t: now })
+  while (waterMouseState.trail.length > 0 && now - waterMouseState.trail[0].t > 2000) {
+    waterMouseState.trail.shift()
+  }
+}
+
+export function clearWaterMouse() {
+  waterMouseState.active = false
+}
 
 function createDots(w: number, h: number, type: TextureType, spacing: number): Dot[] {
   const dots: Dot[] = []
@@ -103,26 +156,62 @@ function createDots(w: number, h: number, type: TextureType, spacing: number): D
   return dots
 }
 
-// Grass: strong traveling wave at ~30° angle, ~150px wavelength
-// Peaks = large circles, troughs = small circles
+// Grass: wave reversed direction, half speed, mouse crush effect
 function drawGrass(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Dot[], time: number) {
   ctx.clearRect(0, 0, w, h)
-  // Fixed angle ~30° with slow drift
   const angle = 0.5 + Math.sin(time * 0.00003) * 0.15
   const dirX = Math.cos(angle)
   const dirY = Math.sin(angle)
-  const wavelength = 150 // ~150px between wave crests
-  const waveSpeed = time * 0.04 // traveling speed
+  const wavelength = 150
+  // Reversed direction (negative), half speed (0.02 instead of 0.04)
+  const waveSpeed = -time * 0.02
+
+  const now = performance.now()
 
   for (const d of dots) {
     const proj = d.x * dirX + d.y * dirY + waveSpeed
     const wave = (Math.sin((proj / wavelength) * Math.PI * 2 + d.phase * 0.3) + 1) / 2
-    // Strong size modulation: 0.2x at trough, 1.8x at peak
-    const sizeScale = 0.2 + wave * 1.6
+    // Min 0.2, max 1.8
+    let sizeScale = 0.2 + wave * 1.6
+    let windInfluence = 1.0
+
+    // Mouse crush effect: check distance to current mouse and trail
+    if (mouseState.active || mouseState.trail.length > 0) {
+      let crushFactor = 0
+      // Current mouse position
+      if (mouseState.active) {
+        const mdx = d.x - mouseState.x
+        const mdy = d.y - mouseState.y
+        const mDist = Math.sqrt(mdx * mdx + mdy * mdy)
+        if (mDist < 50) {
+          const intensity = 1 - mDist / 50
+          crushFactor = Math.max(crushFactor, intensity * intensity)
+        }
+      }
+      // Trail positions (decaying over time)
+      for (const tp of mouseState.trail) {
+        const age = now - tp.t
+        const ageFade = 1 - age / mouseState.trailMaxAge
+        if (ageFade <= 0) continue
+        const tdx = d.x - tp.x
+        const tdy = d.y - tp.y
+        const tDist = Math.sqrt(tdx * tdx + tdy * tdy)
+        if (tDist < 50) {
+          const intensity = (1 - tDist / 50) * ageFade
+          crushFactor = Math.max(crushFactor, intensity * intensity)
+        }
+      }
+      if (crushFactor > 0) {
+        // Crush: shrink to 0.15 and lose wind
+        sizeScale = sizeScale * (1 - crushFactor) + 0.15 * crushFactor
+        windInfluence = 1 - crushFactor
+      }
+    }
+
     const r = d.baseSize * sizeScale
 
-    const wobbleX = Math.sin(time * 0.0004 * d.speed + d.phase) * 0.6
-    const wobbleY = Math.cos(time * 0.0003 * d.speed + d.phase * 1.3) * 0.5
+    const wobbleX = Math.sin(time * 0.0004 * d.speed + d.phase) * 0.6 * windInfluence
+    const wobbleY = Math.cos(time * 0.0003 * d.speed + d.phase * 1.3) * 0.5 * windInfluence
     const alpha = 0.2 + 0.35 * wave
 
     ctx.beginPath()
@@ -132,7 +221,6 @@ function drawGrass(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Do
   }
 }
 
-// Tree (ель): breathing oscillation from center
 function drawTree(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Dot[], time: number) {
   ctx.clearRect(0, 0, w, h)
   const cx = w / 2, cy = h / 2
@@ -157,7 +245,6 @@ function drawTree(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Dot
   }
 }
 
-// Oak: wider color range, particles bleed beyond boundary
 function drawOak(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Dot[], time: number) {
   ctx.clearRect(0, 0, w, h)
   const cx = w / 2, cy = h / 2
@@ -181,16 +268,15 @@ function drawOak(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Dot[
   }
 }
 
-// Water: dark noble tones, ripple rings + glints
+// Water: ripples + mouse-following waves
 function drawWater(ctx: CanvasRenderingContext2D, w: number, h: number, _dots: Dot[], time: number) {
   ctx.clearRect(0, 0, w, h)
   const t = currentTheme
 
-  // Deep base fill
   ctx.fillStyle = `hsla(${t.waterHue}, 30%, ${t.waterLight[0]}%, 0.4)`
   ctx.fillRect(0, 0, w, h)
 
-  // Concentric ripples
+  // Ambient concentric ripples
   const centers = 5
   for (let i = 0; i < centers; i++) {
     const cx = w * (0.1 + 0.8 * ((i * 0.618) % 1))
@@ -213,6 +299,28 @@ function drawWater(ctx: CanvasRenderingContext2D, w: number, h: number, _dots: D
     }
   }
 
+  // Mouse-following ripples
+  const now = performance.now()
+  for (const tp of waterMouseState.trail) {
+    const age = now - tp.t
+    if (age > 2000) continue
+    const progress = age / 2000
+    const maxR = 80
+    for (let ring = 0; ring < 5; ring++) {
+      const radius = (progress + ring * 0.15) * maxR
+      if (radius > maxR) continue
+      const fadeOut = 1 - radius / maxR
+      const alpha = fadeOut * (1 - progress) * 0.25
+      if (alpha < 0.005) continue
+
+      ctx.beginPath()
+      ctx.arc(tp.x, tp.y, radius, 0, Math.PI * 2)
+      ctx.strokeStyle = `hsla(${t.waterHue + 15}, 40%, ${t.waterLight[0] + 30}%, ${alpha})`
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    }
+  }
+
   // Subtle glints
   const glints = Math.floor(w * h / 2000)
   for (let i = 0; i < glints; i++) {
@@ -228,7 +336,7 @@ function drawWater(ctx: CanvasRenderingContext2D, w: number, h: number, _dots: D
   }
 }
 
-// Roof: scalloped tile pattern (overlapping semicircles like real roof tiles)
+// Roof: scalloped tiles
 function drawRoof(ctx: CanvasRenderingContext2D, w: number, h: number, _dots: Dot[], time: number) {
   ctx.clearRect(0, 0, w, h)
   const t = currentTheme
@@ -236,7 +344,6 @@ function drawRoof(ctx: CanvasRenderingContext2D, w: number, h: number, _dots: Do
   const cols = Math.ceil(w / tileW) + 2
   const rows = Math.ceil(h / tileH) + 2
 
-  // Dark background
   ctx.fillStyle = `hsl(${t.roofHue}, 20%, ${t.roofLight[0]}%)`
   ctx.fillRect(0, 0, w, h)
 
@@ -248,13 +355,11 @@ function drawRoof(ctx: CanvasRenderingContext2D, w: number, h: number, _dots: Do
       const hShift = Math.sin(x * 0.03 + y * 0.02 + time * 0.00008) * 3
       const lShift = Math.sin(time * 0.00015 + x * 0.01 + y * 0.025 + row * 0.5) * 2
 
-      // Scallop (overlapping arc) shape
       ctx.beginPath()
       ctx.arc(x + tileW / 2, y, tileW * 0.55, 0, Math.PI, false)
       ctx.fillStyle = `hsl(${t.roofHue + hShift}, ${22 + Math.abs(lShift) * 3}%, ${t.roofLight[0] + 3 + lShift}%)`
       ctx.fill()
 
-      // Subtle highlight on top edge
       ctx.beginPath()
       ctx.arc(x + tileW / 2, y, tileW * 0.55, Math.PI * 0.9, Math.PI * 0.1, true)
       ctx.strokeStyle = `hsla(${t.roofHue + 5}, 15%, ${t.roofLight[0] + 10}%, 0.15)`

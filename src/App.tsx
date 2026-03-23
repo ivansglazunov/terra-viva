@@ -168,10 +168,9 @@ const compassDots: [number, number][] = Array.from({ length: 12 }, (_, i) => {
 // Center: (420, 2091), Top visual tip: (420, ~1780)
 const DIAMOND_TOP = 1871
 
-// Lantern positions: inside diamond, ~70px inset from edges
-// Diamond center (420, 2091), half-diagonal ~311px, inset 70px → ~241px from center
-// Corners (top, right, bottom, left) + mid-edges (4 more) = 8 lanterns
-const DIA_CX = 420, DIA_CY = 2091, DIA_INS = 190
+// Lantern positions: close to diamond edges (~35px inset)
+// Diamond center (420, 2091), half-diagonal ~311px, inset 35px → ~276px from center
+const DIA_CX = 420, DIA_CY = 2091, DIA_INS = 276
 const lanternPositions = [
   { x: DIA_CX, y: DIA_CY - DIA_INS },              // top
   { x: DIA_CX + DIA_INS, y: DIA_CY },              // right
@@ -221,7 +220,7 @@ function Lantern({ x, y, lit, dark }: { x: number; y: number; lit: boolean; dark
   return (
     <div style={{
       position: 'absolute', left: x - 10, top: y - 90,
-      width: 20, zIndex: 7,
+      width: 20, zIndex: 9,
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       pointerEvents: 'none',
     }}>
@@ -435,29 +434,18 @@ function App() {
             width: 1140, height: H,
             pointerEvents: 'none', zIndex: 4,
           }} viewBox={`-150 0 1140 ${H}`}>
-            {/* Stone texture pattern for road */}
-            <defs>
-              <pattern id="stonePat" patternUnits="userSpaceOnUse" width="17" height="17" patternTransform="rotate(8)">
-                <rect width="17" height="17" fill={p.roadStone} />
-                <rect x="1" y="1" width="7" height="7" rx="1" fill={p.roadStoneLight} opacity="0.35" />
-                <rect x="9" y="2" width="7" height="6" rx="1" fill={p.roadStoneDark} opacity="0.3" />
-                <rect x="2" y="9" width="6" height="7" rx="1" fill={p.roadStoneLight} opacity="0.25" />
-                <rect x="10" y="10" width="6" height="6" rx="1" fill={p.roadStoneDark} opacity="0.2" />
-              </pattern>
-            </defs>
-
-            {/* Main road — organic + geometric, static */}
-            <path d={fullRoadD} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            {/* Main road — solid color, static */}
+            <path d={fullRoadD} stroke={p.roadStone} strokeWidth={34} fill="none" strokeLinecap="round" strokeLinejoin="round" />
 
             {/* Fork: right branch off-screen */}
-            <path d="M 420 1740 L 1100 1740" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" />
+            <path d="M 420 1740 L 1100 1740" stroke={p.roadStone} strokeWidth={34} fill="none" strokeLinecap="round" />
 
             {/* Fork: down to diamond tip */}
-            <path d="M 420 1740 L 420 1800" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" />
+            <path d="M 420 1740 L 420 1800" stroke={p.roadStone} strokeWidth={34} fill="none" strokeLinecap="round" />
 
             {/* Branch roads */}
-            <path d={pts2path(branchL)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
-            <path d={pts2path(branchR)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
+            <path d={pts2path(branchL)} stroke={p.roadStone} strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
+            <path d={pts2path(branchR)} stroke={p.roadStone} strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
 
             {/* Stream */}
             <path d={pts2path(stream)} stroke={dark ? '#8a9aaa' : '#a0b4c8'} strokeWidth={14} fill="none" strokeLinecap="round" opacity={dark ? 0.12 : 0.25} />

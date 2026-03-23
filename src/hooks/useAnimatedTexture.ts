@@ -720,26 +720,23 @@ export function useAnimatedTexture(type: TextureType | null, density = 10) {
     const parent = canvas.parentElement
     if (!parent) return
 
+    const { w, h } = sizeRef.current
+
     if (type === 'grass') {
+      // Update viewport bounds for culling
       const parentRect = parent.getBoundingClientRect()
       const scrollOffset = Math.max(0, -parentRect.top)
       const vpH = window.innerHeight + 200
-
-      // Update viewport bounds for culling (no canvas movement)
       setViewportBounds(scrollOffset, scrollOffset + vpH)
 
       // Update grass colors from image slideshow (throttled)
       if (imagesLoaded && time - lastGrassColorUpdate > GRASS_COLOR_UPDATE_INTERVAL) {
-        updateGrassDotColors(dotsRef.current, sizeRef.current.w, sizeRef.current.h, density, time)
+        updateGrassDotColors(dotsRef.current, w, h, density, time)
         lastGrassColorUpdate = time
       }
-
-      drawFns[type](ctx, sizeRef.current.w, sizeRef.current.h, dotsRef.current, time)
-    } else {
-      const rect = parent.getBoundingClientRect()
-      drawFns[type](ctx, rect.width, rect.height, dotsRef.current, time)
     }
 
+    drawFns[type](ctx, w, h, dotsRef.current, time)
     rafRef.current = requestAnimationFrame(animate)
   }, [type, density])
 
@@ -757,30 +754,15 @@ export function useAnimatedTexture(type: TextureType | null, density = 10) {
       const parent = canvas.parentElement
       if (!parent) return
       const rect = parent.getBoundingClientRect()
-
-      if (type === 'grass') {
-        // Full page canvas — culling happens in draw function
-        canvas.width = rect.width
-        canvas.height = rect.height
-        canvas.style.width = rect.width + 'px'
-        canvas.style.height = rect.height + 'px'
-        sizeRef.current = { w: rect.width, h: rect.height }
-
-        grassColorMap = null
-        grassTargetColorMap = null
-
-        dotsRef.current = createDots(rect.width, rect.height, type, density)
-      } else {
-        const dpr = Math.min(window.devicePixelRatio || 1, 2)
-        canvas.width = rect.width * dpr
-        canvas.height = rect.height * dpr
-        canvas.style.width = rect.width + 'px'
-        canvas.style.height = rect.height + 'px'
-        const ctx = canvas.getContext('2d')
-        if (ctx) ctx.scale(dpr, dpr)
-        sizeRef.current = { w: rect.width, h: rect.height }
-        dotsRef.current = createDots(rect.width, rect.height, type, density)
-      }
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      canvas.width = rect.width * dpr
+      canvas.height = rect.height * dpr
+      canvas.style.width = rect.width + 'px'
+      canvas.style.height = rect.height + 'px'
+      const ctx = canvas.getContext('2d')
+      if (ctx) ctx.scale(dpr, dpr)
+      sizeRef.current = { w: rect.width, h: rect.height }
+      dotsRef.current = createDots(rect.width, rect.height, type, density)
     }
 
     resize()

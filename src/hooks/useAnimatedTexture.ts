@@ -232,7 +232,10 @@ export function setMousePosition(x: number, y: number) {
   mouseState.y = y
   mouseState.active = true
   const now = performance.now()
-  mouseState.trail.push({ x, y, t: now })
+  // Throttle trail points to max 1 per 50ms to limit inner loop iterations
+  if (mouseState.trail.length === 0 || now - mouseState.trail[mouseState.trail.length - 1].t > 50) {
+    mouseState.trail.push({ x, y, t: now })
+  }
   while (mouseState.trail.length > 0 && now - mouseState.trail[0].t > mouseState.trailMaxAge) {
     mouseState.trail.shift()
   }
@@ -295,17 +298,12 @@ function createDots(w: number, h: number, type: TextureType, spacing: number): D
             const [br, bg, bb] = boostColor(ir, ig, ib, isDark)
             cr = br; cg = bg; cb = bb
           } else {
-            // Fallback: green hues
+            // Fallback: green hues — use direct HSL→RGB conversion
             const hue = 80 + Math.random() * 80
             const sat = 40 + Math.random() * 30
             const light = t.grassLight[0] + Math.random() * t.grassLight[1]
-            // HSL to rough RGB
-            const c = document.createElement('canvas')
-            const ctx2 = c.getContext('2d')!
-            ctx2.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`
-            ctx2.fillRect(0, 0, 1, 1)
-            const pd = ctx2.getImageData(0, 0, 1, 1).data
-            cr = pd[0]; cg = pd[1]; cb = pd[2]
+            const tmp = hslToRgb(hue, sat, light)
+            cr = tmp[0]; cg = tmp[1]; cb = tmp[2]
           }
           break
         }
@@ -420,9 +418,19 @@ function updateGrassDotColors(dots: Dot[], w: number, h: number, spacing: number
   }
 }
 
+// Viewport culling state — updated by the hook
+const viewportState = { yMin: 0, yMax: 99999 }
+export function setViewportBounds(yMin: number, yMax: number) {
+  viewportState.yMin = yMin
+  viewportState.yMax = yMax
+}
+
 // Grass: wave reversed direction, half speed, mouse crush effect
 function drawGrass(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Dot[], time: number) {
-  ctx.clearRect(0, 0, w, h)
+  // Only clear the visible portion + buffer
+  const clearYMin = Math.max(0, viewportState.yMin - 60)
+  const clearYMax = Math.min(h, viewportState.yMax + 60)
+  ctx.clearRect(0, clearYMin, w, clearYMax - clearYMin)
   const angle = 0.5 + Math.sin(time * 0.00003) * 0.15
   const dirX = Math.cos(angle)
   const dirY = Math.sin(angle)
@@ -430,8 +438,14 @@ function drawGrass(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Do
   const waveSpeed = -time * 0.02
 
   const now = performance.now()
+  // Viewport culling: only draw dots within visible range + buffer
+  const vMin = viewportState.yMin - 50
+  const vMax = viewportState.yMax + 50
 
   for (const d of dots) {
+    // Skip dots outside visible viewport
+    if (d.y < vMin || d.y > vMax) continue
+
     const proj = d.x * dirX + d.y * dirY + waveSpeed
     const wave = (Math.sin((proj / wavelength) * Math.PI * 2 + d.phase * 0.3) + 1) / 2
     let sizeScale = 0.2 + wave * 1.6
@@ -630,43 +644,20 @@ const drawFns: Record<TextureType, typeof drawGrass> = {
 
 // Track last color update time per-canvas to throttle
 let lastGrassColorUpdate = 0
-const GRASS_COLOR_UPDATE_INTERVAL = 100 // ms between color map checks
+const GRASS_COLOR_UPDATE_INTERVAL = 500 // ms between color map checks
 
-export function useAnimatedTexture(type: TextureType, density = 10) {
+// Static texture: draws once + redraws every 500ms for subtle motion
+export function useStaticTexture(type: TextureType | null, density = 10) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dotsRef = useRef<Dot[]>([])
-  const rafRef = useRef<number>(0)
-  const sizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 })
-
-  const animate = useCallback((time: number) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const rect = canvas.parentElement?.getBoundingClientRect()
-    if (!rect) return
-
-    // Periodically update grass colors from image slideshow
-    if (type === 'grass' && imagesLoaded && time - lastGrassColorUpdate > GRASS_COLOR_UPDATE_INTERVAL) {
-      updateGrassDotColors(dotsRef.current, sizeRef.current.w, sizeRef.current.h, density, time)
-      lastGrassColorUpdate = time
-    }
-
-    drawFns[type](ctx, rect.width, rect.height, dotsRef.current, time)
-    rafRef.current = requestAnimationFrame(animate)
-  }, [type, density])
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    if (!type) return
     const canvas = canvasRef.current
     if (!canvas) return
 
-    // Load images for grass color sampling
-    if (type === 'grass') {
-      const base = import.meta.env.BASE_URL || '/'
-      loadAllImages(base)
-    }
-
-    const resize = () => {
+    const setup = () => {
       const rect = canvas.parentElement?.getBoundingClientRect()
       if (!rect) return
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
@@ -675,16 +666,136 @@ export function useAnimatedTexture(type: TextureType, density = 10) {
       canvas.style.width = rect.width + 'px'
       canvas.style.height = rect.height + 'px'
       const ctx = canvas.getContext('2d')
-      if (ctx) ctx.scale(dpr, dpr)
-      sizeRef.current = { w: rect.width, h: rect.height }
+      if (!ctx) return
+      ctx.scale(dpr, dpr)
+      dotsRef.current = createDots(rect.width, rect.height, type, density)
+      drawFns[type](ctx, rect.width, rect.height, dotsRef.current, performance.now())
+    }
 
-      // Reset color maps on resize so they re-sample at new resolution
-      if (type === 'grass') {
-        grassColorMap = null
-        grassTargetColorMap = null
+    setup()
+
+    // Slow redraw for subtle breathing animation
+    intervalRef.current = setInterval(() => {
+      const canvas2 = canvasRef.current
+      if (!canvas2) return
+      const rect = canvas2.parentElement?.getBoundingClientRect()
+      if (!rect) return
+      const ctx = canvas2.getContext('2d')
+      if (!ctx) return
+      drawFns[type](ctx, rect.width, rect.height, dotsRef.current, performance.now())
+    }, 500)
+
+    window.addEventListener('resize', setup)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      window.removeEventListener('resize', setup)
+    }
+  }, [type, density])
+
+  return canvasRef
+}
+
+export function useAnimatedTexture(type: TextureType | null, density = 10) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const dotsRef = useRef<Dot[]>([])
+  const rafRef = useRef<number>(0)
+  const sizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 })
+
+  const lastFrameRef = useRef(0)
+  const grassScrollRef = useRef(0)
+  const grassViewH = useRef(0)
+
+  const animate = useCallback((time: number) => {
+    if (!type) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    // Throttle to ~30fps
+    if (time - lastFrameRef.current < 33) {
+      rafRef.current = requestAnimationFrame(animate)
+      return
+    }
+    lastFrameRef.current = time
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const parent = canvas.parentElement
+    if (!parent) return
+
+    if (type === 'grass') {
+      const parentRect = parent.getBoundingClientRect()
+      const scrollOffset = Math.max(0, -parentRect.top)
+      grassScrollRef.current = scrollOffset
+      const vpH = grassViewH.current
+
+      // Move canvas via transform (GPU, no layout thrash)
+      canvas.style.transform = `translateY(${scrollOffset}px)`
+
+      // Update viewport bounds for culling
+      setViewportBounds(scrollOffset, scrollOffset + vpH)
+
+      // Update grass colors from image slideshow (throttled)
+      if (imagesLoaded && time - lastGrassColorUpdate > GRASS_COLOR_UPDATE_INTERVAL) {
+        updateGrassDotColors(dotsRef.current, sizeRef.current.w, parentRect.height, density, time)
+        lastGrassColorUpdate = time
       }
 
-      dotsRef.current = createDots(rect.width, rect.height, type, density)
+      // Translate context to draw dots at correct positions within viewport-sized canvas
+      ctx.save()
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.translate(0, -scrollOffset)
+      drawFns[type](ctx, sizeRef.current.w, parentRect.height, dotsRef.current, time)
+      ctx.restore()
+    } else {
+      const rect = parent.getBoundingClientRect()
+      drawFns[type](ctx, rect.width, rect.height, dotsRef.current, time)
+    }
+
+    rafRef.current = requestAnimationFrame(animate)
+  }, [type, density])
+
+  useEffect(() => {
+    if (!type) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    if (type === 'grass') {
+      const base = import.meta.env.BASE_URL || '/'
+      loadAllImages(base)
+    }
+
+    const resize = () => {
+      const parent = canvas.parentElement
+      if (!parent) return
+      const rect = parent.getBoundingClientRect()
+
+      if (type === 'grass') {
+        // Viewport-sized canvas (not full page!)
+        const vpH = Math.ceil(window.innerHeight + 200)
+        grassViewH.current = vpH
+        canvas.width = rect.width
+        canvas.height = vpH
+        canvas.style.width = rect.width + 'px'
+        canvas.style.height = vpH + 'px'
+        sizeRef.current = { w: rect.width, h: vpH }
+
+        grassColorMap = null
+        grassTargetColorMap = null
+
+        // Create dots for FULL page height (culling happens in draw)
+        dotsRef.current = createDots(rect.width, rect.height, type, density)
+      } else {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2)
+        canvas.width = rect.width * dpr
+        canvas.height = rect.height * dpr
+        canvas.style.width = rect.width + 'px'
+        canvas.style.height = rect.height + 'px'
+        const ctx = canvas.getContext('2d')
+        if (ctx) ctx.scale(dpr, dpr)
+        sizeRef.current = { w: rect.width, h: rect.height }
+        dotsRef.current = createDots(rect.width, rect.height, type, density)
+      }
     }
 
     resize()

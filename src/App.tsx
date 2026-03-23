@@ -420,7 +420,7 @@ function App() {
         >
           {/* Grass texture */}
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-            <AnimatedTexture type="grass" density={10} />
+            <AnimatedTexture type="grass" density={14} />
           </div>
 
           {/* Foliage darkening toward bottom */}

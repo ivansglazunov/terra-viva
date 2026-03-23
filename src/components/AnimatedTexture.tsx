@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useAnimatedTexture, setWaterMouse, clearWaterMouse, type TextureType } from '../hooks/useAnimatedTexture'
+import { useAnimatedTexture, useStaticTexture, setWaterMouse, clearWaterMouse, type TextureType } from '../hooks/useAnimatedTexture'
 
 interface Props {
   type: TextureType
@@ -7,8 +7,14 @@ interface Props {
   density?: number
 }
 
+// Types that are animated per-frame
+const ANIMATED_TYPES: TextureType[] = ['grass', 'water']
+
 export function AnimatedTexture({ type, className = '', density }: Props) {
-  const canvasRef = useAnimatedTexture(type, density)
+  const isAnimated = ANIMATED_TYPES.includes(type)
+  const animatedRef = useAnimatedTexture(isAnimated ? type : null, density)
+  const staticRef = useStaticTexture(!isAnimated ? type : null, density)
+  const canvasRef = isAnimated ? animatedRef : staticRef
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (type !== 'water') return

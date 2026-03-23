@@ -5,13 +5,14 @@ import './App.css'
 
 const ThemeCtx = createContext<{ dark: boolean; toggle: () => void }>({ dark: true, toggle: () => {} })
 
-const W = 840, H = 2390
+const W = 840, H = 2650
 
 const palette = {
   light: {
     bg: 'linear-gradient(180deg, #4a7a2e 0%, #2d5a1a 40%, #1a3d0f 70%, #0e2208 100%)',
-    road: '#5a3a1a',
-    roadOp: 0.85,
+    roadStone: '#b0a590',
+    roadStoneLight: '#c4b8a0',
+    roadStoneDark: '#9a8e78',
     water: 'rgba(25, 60, 90, 0.55)',
     water2: 'rgba(20, 50, 80, 0.45)',
     cream: '#f5f0e6',
@@ -21,7 +22,7 @@ const palette = {
     verandaBg: 'radial-gradient(circle, #e8e0d0 0%, #d4cbb8 50%, #b8a890 100%)',
     verandaBorder: '#a89878',
     verandaText: '#3a3020',
-    diamond: 'linear-gradient(135deg, #5a3a1a 0%, #8b6340 50%, #5a3a1a 100%)',
+    diamondGrad: 'linear-gradient(135deg, #c4b8a0 0%, #d8ccb4 30%, #c0b498 50%, #b0a488 70%, #a89880 100%)',
     cardBg: 'rgba(255, 255, 255, 0.15)',
     cardBorder: 'rgba(255, 255, 255, 0.2)',
     quote: '#c9a84c',
@@ -30,11 +31,15 @@ const palette = {
     marbleBg: 'linear-gradient(180deg, #f0ece4 0%, #e0d8cc 30%, #d4ccc0 60%, #c8bfb0 100%)',
     marbleSide: 'linear-gradient(180deg, #b0a590 0%, #8a7d68 50%, #6a5f4c 100%)',
     marbleText: '#2a2018',
+    lanternIron: '#4a4540',
+    lanternGlow: 'rgba(255,200,80,0.9)',
+    lanternRay: 'rgba(255,200,80,0.15)',
   },
   dark: {
     bg: 'linear-gradient(180deg, #1a2e10 0%, #0f1f08 35%, #080f04 65%, #030802 100%)',
-    road: '#3d2810',
-    roadOp: 0.7,
+    roadStone: '#5a5048',
+    roadStoneLight: '#6a6058',
+    roadStoneDark: '#4a4238',
     water: 'rgba(10, 35, 60, 0.65)',
     water2: 'rgba(8, 30, 50, 0.55)',
     cream: '#e8dcc8',
@@ -44,7 +49,7 @@ const palette = {
     verandaBg: 'radial-gradient(circle, #d4cbb8 0%, #b8a890 30%, #a09078 60%, #887860 100%)',
     verandaBorder: '#8a7a60',
     verandaText: '#2a2018',
-    diamond: 'linear-gradient(135deg, #2a1a08 0%, #4a3018 50%, #2a1a08 100%)',
+    diamondGrad: 'linear-gradient(135deg, #4a4238 0%, #5a5048 30%, #504840 50%, #3a3228 70%, #2e2820 100%)',
     cardBg: 'rgba(0, 0, 0, 0.25)',
     cardBorder: 'rgba(0, 0, 0, 0.3)',
     quote: '#a8883c',
@@ -53,9 +58,13 @@ const palette = {
     marbleBg: 'linear-gradient(180deg, #d4ccc0 0%, #c0b8a8 30%, #a89888 60%, #908070 100%)',
     marbleSide: 'linear-gradient(180deg, #706050 0%, #504030 50%, #3a2e20 100%)',
     marbleText: '#f0ece4',
+    lanternIron: '#2a2520',
+    lanternGlow: 'rgba(255,180,60,0.85)',
+    lanternRay: 'rgba(255,180,60,0.12)',
   },
 }
 
+// Catmull-rom for organic road
 function pts2path(pts: [number, number][]): string {
   if (pts.length < 2) return ''
   let d = `M ${pts[0][0]} ${pts[0][1]}`
@@ -66,24 +75,28 @@ function pts2path(pts: [number, number][]): string {
   return d
 }
 
-// Road: hero → lake area → RIGHT side past Направления →
-// cross to LEFT side past Критерии → center → diamond
-const mainRoad: [number, number][] = [
+// Organic road: hero → lake area → approach Направления from left
+const organicRoad: [number, number][] = [
   [424, 317],
   [420, 380], [640, 460], [630, 620],
   [560, 480], [300, 430], [20, 560],
   [40, 850],
-  // Approach from left, swing to RIGHT side
-  [200, 920], [760, 950],
-  // Down the RIGHT side past Направления
-  [780, 1100], [770, 1290],
-  // Cross through center to LEFT side
-  [420, 1350], [80, 1390],
-  // Down the LEFT side past Критерии
-  [60, 1500], [70, 1650],
-  // Return to center, meet diamond top point
-  [250, 1700], [420, 1720],
+  [200, 920], [720, 950],
 ]
+
+// Geometric road with clean rounded corners (Q = quadratic bezier at corner)
+// Right past Направления → across to left → down past Критерии → right to center → fork
+const R = 40
+const geoRoadD = [
+  `Q 760 950 760 ${950 + R}`,      // corner: right → down
+  `L 760 1310`,                      // straight down past Направления
+  `Q 760 1350 ${760 - R} 1350`,    // corner: down → left
+  `L ${60 + R} 1350`,               // straight left across page
+  `Q 60 1350 60 ${1350 + R}`,      // corner: left → down
+  `L 60 1700`,                       // straight down past Критерии
+  `Q 60 1740 ${60 + R} 1740`,      // corner: down → right
+  `L 420 1740`,                      // straight right to center (fork point)
+].join(' ')
 
 const stream: [number, number][] = [
   [580, 858], [500, 880], [360, 890], [240, 870], [130, 810],
@@ -102,7 +115,6 @@ const rightTrees = [
   { x: 720, y: 130, s: 150 }, { x: 630, y: 260, s: 210 },
 ]
 
-// Services — auto-grid, 4 columns top row, 3 bottom row centered
 const services = [
   { num: '01', name: 'Проектирование', desc: 'Концепция, планировка, 3D-визуализация' },
   { num: '02', name: 'Благоустройство', desc: 'Мощение, подпорные стенки, натуральный камень' },
@@ -113,23 +125,16 @@ const services = [
   { num: '07', name: 'Геопластика', desc: 'Моделирование рельефа: холмы, террасы' },
 ]
 
-// Auto-grid for services: 4 cols top, 3 cols bottom (centered)
-const SVC_CARD = 140, SVC_GAP = 15
-const SVC_COLS = 4
-const svcGridW = SVC_COLS * SVC_CARD + (SVC_COLS - 1) * SVC_GAP // 605
-const svcGridLeft = (W - svcGridW) / 2 // ~117.5
+const SVC_CARD = 140, SVC_GAP = 15, SVC_COLS = 4
+const svcGridW = SVC_COLS * SVC_CARD + (SVC_COLS - 1) * SVC_GAP
+const svcGridLeft = (W - svcGridW) / 2
 const SVC_START_Y = 1000
 function svcPos(idx: number): { x: number; y: number } {
-  if (idx < SVC_COLS) {
-    // First row — 4 cards
-    return { x: svcGridLeft + idx * (SVC_CARD + SVC_GAP), y: SVC_START_Y }
-  }
-  // Second row — 3 cards, centered
+  if (idx < SVC_COLS) return { x: svcGridLeft + idx * (SVC_CARD + SVC_GAP), y: SVC_START_Y }
   const row2Count = services.length - SVC_COLS
   const row2W = row2Count * SVC_CARD + (row2Count - 1) * SVC_GAP
   const row2Left = (W - row2W) / 2
-  const col = idx - SVC_COLS
-  return { x: row2Left + col * (SVC_CARD + SVC_GAP), y: SVC_START_Y + SVC_CARD + SVC_GAP }
+  return { x: row2Left + (idx - SVC_COLS) * (SVC_CARD + SVC_GAP), y: SVC_START_Y + SVC_CARD + SVC_GAP }
 }
 
 const critItems = [
@@ -140,16 +145,14 @@ const critItems = [
   { label: 'Дизайн', sub: 'design fit', hue: 35, val: 0.85 },
   { label: 'Освещение', sub: 'lighting', hue: 280, val: 0.87 },
 ]
-// Crit grid: 3 cols × 2 rows, centered
 const CRIT_COL_W = 95, CRIT_GAP = 20
 const critGridW = 3 * CRIT_COL_W + 2 * CRIT_GAP
 const critGridLeft = (W - critGridW) / 2
 const CRIT_START_Y = 1460
 function critPos(idx: number): { x: number; y: number } {
-  const col = idx % 3, row = Math.floor(idx / 3)
   return {
-    x: critGridLeft + col * (CRIT_COL_W + CRIT_GAP),
-    y: CRIT_START_Y + row * 115,
+    x: critGridLeft + (idx % 3) * (CRIT_COL_W + CRIT_GAP),
+    y: CRIT_START_Y + Math.floor(idx / 3) * 115,
   }
 }
 
@@ -157,6 +160,22 @@ const compassDots: [number, number][] = Array.from({ length: 12 }, (_, i) => {
   const a = (i / 12) * Math.PI * 2 - Math.PI / 2
   return [667.5 + Math.cos(a) * 118, 667.5 + Math.sin(a) * 118] as [number, number]
 })
+
+// Diamond geometry
+// CSS: left=200, top=1871, 440×440, rotate(45deg)
+// Center: (420, 2091), Top visual tip: (420, ~1780)
+const DIAMOND_TOP = 1871
+const DIAMOND_CENTER_Y = DIAMOND_TOP + 220
+
+// Lantern positions around diamond
+const lanternPositions = [
+  { x: 210, y: 1920 },
+  { x: 630, y: 1920 },
+  { x: 90, y: 2091 },
+  { x: 750, y: 2091 },
+  { x: 210, y: 2260 },
+  { x: 630, y: 2260 },
+]
 
 function CritRing({ hue, val, size = 80 }: { hue: number; val: number; size?: number }) {
   const { dark } = useContext(ThemeCtx)
@@ -189,6 +208,86 @@ function CritRing({ hue, val, size = 80 }: { hue: number; val: number; size?: nu
   return <canvas ref={canvasRef} style={{ width: size, height: size }} />
 }
 
+// Narnia-style lantern
+function Lantern({ x, y, lit, dark }: { x: number; y: number; lit: boolean; dark: boolean }) {
+  const ironColor = dark ? '#2a2520' : '#4a4540'
+  const ironLight = dark ? '#3a3530' : '#5a5550'
+  return (
+    <div style={{
+      position: 'absolute', left: x - 10, top: y - 90,
+      width: 20, zIndex: 7,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      pointerEvents: 'none',
+    }}>
+      {/* Lamp crown (ornate top) */}
+      <div style={{
+        width: 6, height: 8, background: ironColor,
+        borderRadius: '2px 2px 0 0',
+      }} />
+      {/* Crossbar */}
+      <div style={{
+        width: 18, height: 2, background: ironColor,
+        marginTop: -1,
+      }} />
+      {/* Glass housing */}
+      <div style={{
+        width: 14, height: 20,
+        border: `1.5px solid ${ironLight}`,
+        borderRadius: '2px 2px 4px 4px',
+        position: 'relative',
+        overflow: 'visible',
+        background: lit
+          ? `radial-gradient(circle, rgba(255,220,120,0.95) 0%, rgba(255,180,60,0.5) 60%, transparent 100%)`
+          : dark ? 'rgba(15,12,8,0.6)' : 'rgba(200,195,185,0.3)',
+        transition: 'background 1.2s ease',
+        boxShadow: lit
+          ? `0 0 12px rgba(255,200,80,0.6), 0 0 30px rgba(255,180,60,0.3), 0 0 60px rgba(255,160,40,0.15)`
+          : 'none',
+      }}>
+        {/* Large glow area */}
+        {lit && <div style={{
+          position: 'absolute',
+          left: -80, top: -80,
+          width: 180, height: 200,
+          borderRadius: '50%',
+          background: 'radial-gradient(ellipse, rgba(255,200,80,0.2) 0%, rgba(255,180,60,0.08) 40%, transparent 70%)',
+          pointerEvents: 'none',
+          transition: 'opacity 1.2s ease',
+        }} />}
+        {/* Light rays */}
+        {lit && [0, 45, 90, 135, 180, 225, 270, 315].map((angle) => (
+          <div key={angle} style={{
+            position: 'absolute',
+            left: '50%', top: '50%',
+            width: 1.5,
+            height: 50 + Math.sin(angle * 0.017) * 20,
+            background: `linear-gradient(to bottom, rgba(255,200,80,0.25) 0%, rgba(255,200,80,0.05) 60%, transparent 100%)`,
+            transformOrigin: 'top center',
+            transform: `translateX(-0.75px) rotate(${angle}deg)`,
+            pointerEvents: 'none',
+            opacity: 0.4 + Math.cos(angle * 0.035) * 0.2,
+          }} />
+        ))}
+      </div>
+      {/* Bottom cap */}
+      <div style={{
+        width: 16, height: 2, background: ironColor,
+      }} />
+      {/* Post */}
+      <div style={{
+        width: 4, height: 55,
+        background: `linear-gradient(180deg, ${ironColor} 0%, ${ironLight} 100%)`,
+      }} />
+      {/* Base */}
+      <div style={{
+        width: 14, height: 3,
+        background: ironColor,
+        borderRadius: '0 0 2px 2px',
+      }} />
+    </div>
+  )
+}
+
 function ThemeToggle() {
   const { dark, toggle } = useContext(ThemeCtx)
   return (
@@ -210,6 +309,7 @@ function ThemeToggle() {
 function App() {
   const [dark, setDark] = useState(true)
   const [scale, setScale] = useState(1)
+  const [lanternsLit, setLanternsLit] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const toggle = () => setDark(d => !d)
@@ -226,7 +326,6 @@ function App() {
     return () => window.removeEventListener('resize', resize)
   }, [])
 
-  // Mouse tracking for grass crush effect — convert to drawio coordinates
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const container = containerRef.current
     if (!container) return
@@ -239,6 +338,9 @@ function App() {
   const handleMouseLeave = useCallback(() => {
     clearMousePosition()
   }, [])
+
+  // Build full road path: organic (catmull-rom) + geometric (clean corners)
+  const fullRoadD = pts2path(organicRoad) + ' ' + geoRoadD
 
   return (
     <ThemeCtx.Provider value={{ dark, toggle }}>
@@ -275,7 +377,7 @@ function App() {
             transition: 'background 1s ease',
           }} />
 
-          {/* === WATER — deep noble dark tones === */}
+          {/* === WATER === */}
           <div style={{
             position: 'absolute', left: 100, top: 510,
             width: 535.5, height: 357,
@@ -304,10 +406,32 @@ function App() {
             position: 'absolute', top: 0, left: -150,
             width: 1140, height: H,
             pointerEvents: 'none', zIndex: 4,
-          }} viewBox="-150 0 1140 2390">
-            <path d={pts2path(mainRoad)} stroke={p.road} strokeWidth={34} fill="none" strokeLinecap="round" strokeLinejoin="round" opacity={p.roadOp} />
-            <path d={pts2path(branchL)} stroke={p.road} strokeWidth={34} fill="none" strokeLinecap="round" opacity={p.roadOp * 0.7} />
-            <path d={pts2path(branchR)} stroke={p.road} strokeWidth={34} fill="none" strokeLinecap="round" opacity={p.roadOp * 0.7} />
+          }} viewBox={`-150 0 1140 ${H}`}>
+            {/* Stone texture pattern for road */}
+            <defs>
+              <pattern id="stonePat" patternUnits="userSpaceOnUse" width="17" height="17" patternTransform="rotate(8)">
+                <rect width="17" height="17" fill={p.roadStone} />
+                <rect x="1" y="1" width="7" height="7" rx="1" fill={p.roadStoneLight} opacity="0.35" />
+                <rect x="9" y="2" width="7" height="6" rx="1" fill={p.roadStoneDark} opacity="0.3" />
+                <rect x="2" y="9" width="6" height="7" rx="1" fill={p.roadStoneLight} opacity="0.25" />
+                <rect x="10" y="10" width="6" height="6" rx="1" fill={p.roadStoneDark} opacity="0.2" />
+              </pattern>
+            </defs>
+
+            {/* Main road — organic + geometric */}
+            <path d={fullRoadD} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+            {/* Fork: right branch off-screen */}
+            <path d="M 420 1740 L 1100 1740" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" />
+
+            {/* Fork: down to diamond tip */}
+            <path d="M 420 1740 L 420 1800" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" />
+
+            {/* Branch roads */}
+            <path d={pts2path(branchL)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
+            <path d={pts2path(branchR)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
+
+            {/* Stream */}
             <path d={pts2path(stream)} stroke={dark ? '#8a9aaa' : '#a0b4c8'} strokeWidth={14} fill="none" strokeLinecap="round" opacity={dark ? 0.12 : 0.25} />
           </svg>
 
@@ -346,7 +470,7 @@ function App() {
             </div>
           </div>
 
-          {/* === TREES (ели) === */}
+          {/* === TREES === */}
           {[...leftTrees, ...rightTrees].map((t, i) => (
             <div key={`tree${i}`} style={{
               position: 'absolute', left: t.x, top: t.y,
@@ -357,7 +481,7 @@ function App() {
             </div>
           ))}
 
-          {/* === "О нас" — marble stone veranda with columns === */}
+          {/* === "О нас" — marble veranda === */}
           <div style={{
             position: 'absolute', left: 560, top: 560,
             width: 215, height: 215,
@@ -382,7 +506,7 @@ function App() {
             }}>О нас</span>
           </div>
 
-          {/* Column dots — marble columns */}
+          {/* Marble columns */}
           {compassDots.map(([cx, cy], i) => (
             <div key={`col${i}`} style={{
               position: 'absolute', left: cx - 10, top: cy - 10,
@@ -399,12 +523,13 @@ function App() {
             }} />
           ))}
 
-          {/* === About text over water — CENTERED === */}
+          {/* === About text over water — pointer-events: none for water interaction === */}
           <div style={{
             position: 'absolute', left: 130, top: 590,
             width: 402, height: 200, zIndex: 6,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             textAlign: 'center',
+            pointerEvents: 'none',
           }}>
             <p style={{
               fontFamily: "'Cormorant Garamond', serif",
@@ -432,7 +557,7 @@ function App() {
             </div>
           ))}
 
-          {/* === Направления — CENTERED === */}
+          {/* === Направления === */}
           <div style={{
             position: 'absolute', left: 0, top: 960,
             width: W, zIndex: 6,
@@ -442,7 +567,7 @@ function App() {
             letterSpacing: '0.05em',
           }}>Направления</div>
 
-          {/* === SERVICE CARDS — auto-grid, semi-transparent === */}
+          {/* === SERVICE CARDS === */}
           {services.map((s, i) => {
             const pos = svcPos(i)
             return (
@@ -481,7 +606,7 @@ function App() {
             )
           })}
 
-          {/* === Критерии качества — CENTERED === */}
+          {/* === Критерии качества === */}
           <div style={{
             position: 'absolute', left: 0, top: 1400,
             width: W, zIndex: 6,
@@ -511,20 +636,43 @@ function App() {
             )
           })}
 
-          {/* === Diamond (top point at 420, 1720 — road arrives here) === */}
+          {/* === Diamond — stone texture === */}
           <div style={{
-            position: 'absolute', left: 200, top: 1720,
+            position: 'absolute', left: 200, top: DIAMOND_TOP,
             width: 440, height: 440,
-            background: p.diamond,
+            background: p.diamondGrad,
             transform: 'rotate(45deg)',
             zIndex: 5,
             boxShadow: '0 10px 50px rgba(0,0,0,0.4)',
             transition: 'background 0.8s ease',
+            // Subtle stone veining
+            backgroundImage: `
+              ${p.diamondGrad},
+              repeating-linear-gradient(
+                135deg,
+                transparent 0px,
+                transparent 30px,
+                rgba(180,170,150,0.06) 30px,
+                rgba(180,170,150,0.06) 31px
+              ),
+              repeating-linear-gradient(
+                45deg,
+                transparent 0px,
+                transparent 25px,
+                rgba(120,110,90,0.04) 25px,
+                rgba(120,110,90,0.04) 26px
+              )
+            `,
           }} />
+
+          {/* === Lanterns around diamond === */}
+          {lanternPositions.map((lp, i) => (
+            <Lantern key={`lantern${i}`} x={lp.x} y={lp.y} lit={lanternsLit} dark={dark} />
+          ))}
 
           {/* === Contact text === */}
           <div style={{
-            position: 'absolute', left: 219, top: 1855,
+            position: 'absolute', left: 219, top: DIAMOND_TOP + 85,
             width: 402, height: 130, zIndex: 6,
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center', textAlign: 'center',
@@ -540,14 +688,17 @@ function App() {
             }}>Расскажите о вашем участке — мы предложим решение</div>
           </div>
 
-          {/* === СВЯЗАТЬСЯ — marble monolith, NO border-radius === */}
-          <div style={{
-            position: 'absolute', left: 300, top: 1990,
-            width: 240, zIndex: 6,
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center',
-          }}>
-            {/* Main stone face — large, illuminated */}
+          {/* === СВЯЗАТЬСЯ — marble monolith === */}
+          <div
+            style={{
+              position: 'absolute', left: 300, top: DIAMOND_TOP + 220,
+              width: 240, zIndex: 8,
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center',
+            }}
+            onMouseEnter={() => setLanternsLit(true)}
+            onMouseLeave={() => setLanternsLit(false)}
+          >
             <a href="tel:+79263207755" style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 240, height: 70,
@@ -564,10 +715,8 @@ function App() {
                 ${p.marbleBg},
                 repeating-linear-gradient(
                   120deg,
-                  transparent 0px,
-                  transparent 20px,
-                  rgba(180,170,150,0.08) 20px,
-                  rgba(180,170,150,0.08) 21px
+                  transparent 0px, transparent 20px,
+                  rgba(180,170,150,0.08) 20px, rgba(180,170,150,0.08) 21px
                 )
               `,
             }}>
@@ -578,7 +727,6 @@ function App() {
                 color: p.marbleText,
               }}>СВЯЗАТЬСЯ</span>
             </a>
-            {/* Shadow side — darker marble, phone number */}
             <div style={{
               width: 240, height: 24,
               background: p.marbleSide,
@@ -587,10 +735,8 @@ function App() {
                 ${p.marbleSide},
                 repeating-linear-gradient(
                   120deg,
-                  transparent 0px,
-                  transparent 15px,
-                  rgba(0,0,0,0.05) 15px,
-                  rgba(0,0,0,0.05) 16px
+                  transparent 0px, transparent 15px,
+                  rgba(0,0,0,0.05) 15px, rgba(0,0,0,0.05) 16px
                 )
               `,
               transition: 'all 0.8s ease',
@@ -605,7 +751,7 @@ function App() {
 
           {/* === Philosophy quote === */}
           <div style={{
-            position: 'absolute', left: 161.56, top: 2180,
+            position: 'absolute', left: 161.56, top: DIAMOND_TOP + 440,
             width: 516.87, height: 200, zIndex: 6,
             display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center',
           }}>

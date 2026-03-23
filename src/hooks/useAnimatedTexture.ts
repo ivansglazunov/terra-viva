@@ -61,7 +61,7 @@ const mouseState = {
   y: -9999,
   active: false,
   trail: [] as MouseTrail[],
-  trailMaxAge: 1200, // ms for trail to fade
+  trailMaxAge: 4800, // 4x longer trail
 }
 
 export function setMousePosition(x: number, y: number) {
@@ -118,12 +118,29 @@ function createDots(w: number, h: number, type: TextureType, spacing: number): D
       let baseSize: number, hue: number, sat: number, light: number
 
       switch (type) {
-        case 'grass':
+        case 'grass': {
           baseSize = spacing * 0.3 + Math.random() * spacing * 0.2
-          hue = t.grassHue[0] + Math.random() * t.grassHue[1]
-          sat = 45 + Math.random() * 35
+          // Multi-color palette like terra-viva-v3 halftone
+          const r = Math.random()
+          if (r < 0.45) {
+            hue = 80 + Math.random() * 80      // greens (dominant)
+          } else if (r < 0.62) {
+            hue = 50 + Math.random() * 30       // yellow-green
+          } else if (r < 0.78) {
+            hue = 160 + Math.random() * 50      // teal-cyan
+          } else if (r < 0.90) {
+            hue = 210 + Math.random() * 40      // blue
+          } else {
+            hue = 270 + Math.random() * 40      // purple
+          }
+          // Spatial clustering via noise
+          const spatialNoise = Math.sin(x * 0.02 + y * 0.015) * 25
+            + Math.cos(x * 0.008 - y * 0.025) * 15
+          hue = ((hue + spatialNoise) % 360 + 360) % 360
+          sat = 40 + Math.random() * 45
           light = t.grassLight[0] + Math.random() * t.grassLight[1]
           break
+        }
         case 'tree':
           baseSize = spacing * 0.35 + Math.random() * spacing * 0.25
           hue = 105 + Math.random() * 25
@@ -183,8 +200,8 @@ function drawGrass(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Do
         const mdx = d.x - mouseState.x
         const mdy = d.y - mouseState.y
         const mDist = Math.sqrt(mdx * mdx + mdy * mdy)
-        if (mDist < 50) {
-          const intensity = 1 - mDist / 50
+        if (mDist < 100) {
+          const intensity = 1 - mDist / 100
           crushFactor = Math.max(crushFactor, intensity * intensity)
         }
       }
@@ -196,8 +213,8 @@ function drawGrass(ctx: CanvasRenderingContext2D, w: number, h: number, dots: Do
         const tdx = d.x - tp.x
         const tdy = d.y - tp.y
         const tDist = Math.sqrt(tdx * tdx + tdy * tdy)
-        if (tDist < 50) {
-          const intensity = (1 - tDist / 50) * ageFade
+        if (tDist < 100) {
+          const intensity = (1 - tDist / 100) * ageFade
           crushFactor = Math.max(crushFactor, intensity * intensity)
         }
       }

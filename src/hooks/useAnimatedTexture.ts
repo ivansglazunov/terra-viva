@@ -702,8 +702,6 @@ export function useAnimatedTexture(type: TextureType | null, density = 10) {
   const sizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 })
 
   const lastFrameRef = useRef(0)
-  const grassScrollRef = useRef(0)
-  const grassViewH = useRef(0)
 
   const animate = useCallback((time: number) => {
     if (!type) return
@@ -725,28 +723,18 @@ export function useAnimatedTexture(type: TextureType | null, density = 10) {
     if (type === 'grass') {
       const parentRect = parent.getBoundingClientRect()
       const scrollOffset = Math.max(0, -parentRect.top)
-      grassScrollRef.current = scrollOffset
-      const vpH = grassViewH.current
+      const vpH = window.innerHeight + 200
 
-      // Move canvas via transform (GPU, no layout thrash)
-      canvas.style.transform = `translateY(${scrollOffset}px)`
-
-      // Update viewport bounds for culling
+      // Update viewport bounds for culling (no canvas movement)
       setViewportBounds(scrollOffset, scrollOffset + vpH)
 
       // Update grass colors from image slideshow (throttled)
       if (imagesLoaded && time - lastGrassColorUpdate > GRASS_COLOR_UPDATE_INTERVAL) {
-        updateGrassDotColors(dotsRef.current, sizeRef.current.w, parentRect.height, density, time)
+        updateGrassDotColors(dotsRef.current, sizeRef.current.w, sizeRef.current.h, density, time)
         lastGrassColorUpdate = time
       }
 
-      // Translate context to draw dots at correct positions within viewport-sized canvas
-      ctx.save()
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.translate(0, -scrollOffset)
-      drawFns[type](ctx, sizeRef.current.w, parentRect.height, dotsRef.current, time)
-      ctx.restore()
+      drawFns[type](ctx, sizeRef.current.w, sizeRef.current.h, dotsRef.current, time)
     } else {
       const rect = parent.getBoundingClientRect()
       drawFns[type](ctx, rect.width, rect.height, dotsRef.current, time)
@@ -771,19 +759,16 @@ export function useAnimatedTexture(type: TextureType | null, density = 10) {
       const rect = parent.getBoundingClientRect()
 
       if (type === 'grass') {
-        // Viewport-sized canvas (not full page!)
-        const vpH = Math.ceil(window.innerHeight + 200)
-        grassViewH.current = vpH
+        // Full page canvas — culling happens in draw function
         canvas.width = rect.width
-        canvas.height = vpH
+        canvas.height = rect.height
         canvas.style.width = rect.width + 'px'
-        canvas.style.height = vpH + 'px'
-        sizeRef.current = { w: rect.width, h: vpH }
+        canvas.style.height = rect.height + 'px'
+        sizeRef.current = { w: rect.width, h: rect.height }
 
         grassColorMap = null
         grassTargetColorMap = null
 
-        // Create dots for FULL page height (culling happens in draw)
         dotsRef.current = createDots(rect.width, rect.height, type, density)
       } else {
         const dpr = Math.min(window.devicePixelRatio || 1, 2)

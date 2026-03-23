@@ -317,13 +317,7 @@ function App() {
   const [scale, setScale] = useState(1)
   const [lanternsLit, setLanternsLit] = useState(false)
   const [lanternsHover, setLanternsHover] = useState(false)
-  const [roadProgress, setRoadProgress] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
-  const roadRef = useRef<SVGPathElement>(null)
-  const branchLRef = useRef<SVGPathElement>(null)
-  const branchRRef = useRef<SVGPathElement>(null)
-  const forkRightRef = useRef<SVGPathElement>(null)
-  const forkDownRef = useRef<SVGPathElement>(null)
 
   const toggle = () => setDark(d => !d)
   const p = dark ? palette.dark : palette.light
@@ -339,14 +333,10 @@ function App() {
     return () => window.removeEventListener('resize', resize)
   }, [])
 
-  // Scroll-based road reveal + lantern activation
+  // Scroll-based lantern activation
   useEffect(() => {
     const onScroll = () => {
       const scrollY = window.scrollY
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight
-      const progress = maxScroll > 0 ? Math.min(1, scrollY / maxScroll) : 0
-      setRoadProgress(progress)
-
       // Check if СВЯЗАТЬСЯ button is in 30% middle of viewport
       const contactTop = (DIAMOND_TOP + 220) * scale
       const viewH = window.innerHeight
@@ -363,22 +353,6 @@ function App() {
     onScroll()
     return () => window.removeEventListener('scroll', onScroll)
   }, [scale, lanternsHover])
-
-  // Apply stroke-dashoffset animation to road paths
-  useEffect(() => {
-    const applyDash = (ref: React.RefObject<SVGPathElement | null>, delay: number) => {
-      const el = ref.current
-      if (!el) return
-      const len = el.getTotalLength()
-      el.style.strokeDasharray = `${len}`
-      el.style.strokeDashoffset = `${len * (1 - Math.min(1, Math.max(0, (roadProgress - delay) / (1 - delay))))}`
-    }
-    applyDash(roadRef, 0)
-    applyDash(branchLRef, 0.15)
-    applyDash(branchRRef, 0.25)
-    applyDash(forkRightRef, 0.75)
-    applyDash(forkDownRef, 0.75)
-  }, [roadProgress])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const container = containerRef.current
@@ -472,18 +446,18 @@ function App() {
               </pattern>
             </defs>
 
-            {/* Main road — organic + geometric, drawn on scroll */}
-            <path ref={roadRef} d={fullRoadD} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
+            {/* Main road — organic + geometric, static */}
+            <path d={fullRoadD} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" strokeLinejoin="round" />
 
             {/* Fork: right branch off-screen */}
-            <path ref={forkRightRef} d="M 420 1740 L 1100 1740" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
+            <path d="M 420 1740 L 1100 1740" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" />
 
             {/* Fork: down to diamond tip */}
-            <path ref={forkDownRef} d="M 420 1740 L 420 1800" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
+            <path d="M 420 1740 L 420 1800" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" />
 
             {/* Branch roads */}
-            <path ref={branchLRef} d={pts2path(branchL)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
-            <path ref={branchRRef} d={pts2path(branchR)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
+            <path d={pts2path(branchL)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
+            <path d={pts2path(branchR)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
 
             {/* Stream */}
             <path d={pts2path(stream)} stroke={dark ? '#8a9aaa' : '#a0b4c8'} strokeWidth={14} fill="none" strokeLinecap="round" opacity={dark ? 0.12 : 0.25} />

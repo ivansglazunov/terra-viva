@@ -165,7 +165,6 @@ const compassDots: [number, number][] = Array.from({ length: 12 }, (_, i) => {
 // CSS: left=200, top=1871, 440×440, rotate(45deg)
 // Center: (420, 2091), Top visual tip: (420, ~1780)
 const DIAMOND_TOP = 1871
-const DIAMOND_CENTER_Y = DIAMOND_TOP + 220
 
 // Lantern positions around diamond
 const lanternPositions = [

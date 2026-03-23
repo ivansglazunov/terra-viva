@@ -66,22 +66,23 @@ function pts2path(pts: [number, number][]): string {
   return d
 }
 
-// Road: starts from hero, goes right around Направления, left through center,
-// left around Критерии, then center down to diamond top
+// Road: hero → lake area → RIGHT side past Направления →
+// cross to LEFT side past Критерии → center → diamond
 const mainRoad: [number, number][] = [
   [424, 317],
   [420, 380], [640, 460], [630, 620],
   [560, 480], [300, 430], [20, 560],
   [40, 850],
-  // Goes RIGHT around Направления (center ~420, y~1100)
-  [420, 950],
-  [750, 1000], [780, 1150], [700, 1250],
-  // Crosses center to left
-  [420, 1300], [150, 1350],
-  // Goes LEFT around Критерии (center ~420, y~1450)
-  [80, 1400], [60, 1500], [150, 1580],
-  // Back to center, down to diamond
-  [300, 1560], [420, 1560],
+  // Approach from left, swing to RIGHT side
+  [200, 920], [760, 950],
+  // Down the RIGHT side past Направления
+  [780, 1100], [770, 1290],
+  // Cross through center to LEFT side
+  [420, 1350], [80, 1390],
+  // Down the LEFT side past Критерии
+  [60, 1500], [70, 1650],
+  // Return to center, meet diamond top point
+  [250, 1700], [420, 1720],
 ]
 
 const stream: [number, number][] = [
@@ -101,25 +102,56 @@ const rightTrees = [
   { x: 720, y: 130, s: 150 }, { x: 630, y: 260, s: 210 },
 ]
 
-// Services centered
+// Services — auto-grid, 4 columns top row, 3 bottom row centered
 const services = [
-  { num: '01', col: 0, row: 0, name: 'Проектирование', desc: 'Концепция, планировка, 3D-визуализация' },
-  { num: '02', col: 1, row: 0, name: 'Благоустройство', desc: 'Мощение, подпорные стенки, натуральный камень' },
-  { num: '03', col: 2, row: 0, name: 'Озеленение', desc: 'Посадка деревьев, формовка ниваки' },
-  { num: '04', col: 0, row: 1, name: 'Дренажные системы', desc: 'Защита от подтопления и застоя воды' },
-  { num: '05', col: 1, row: 1, name: 'Системы автополива', desc: 'Интеллектуальный полив с датчиками' },
-  { num: '06', col: 0, row: 2, name: 'Электрика и освещение', desc: 'Архитектурная подсветка ландшафта' },
-  { num: '07', col: 1, row: 2, name: 'Геопластика', desc: 'Моделирование рельефа: холмы, террасы' },
+  { num: '01', name: 'Проектирование', desc: 'Концепция, планировка, 3D-визуализация' },
+  { num: '02', name: 'Благоустройство', desc: 'Мощение, подпорные стенки, натуральный камень' },
+  { num: '03', name: 'Озеленение', desc: 'Посадка деревьев, формовка ниваки' },
+  { num: '04', name: 'Дренажные системы', desc: 'Защита от подтопления и застоя воды' },
+  { num: '05', name: 'Системы автополива', desc: 'Интеллектуальный полив с датчиками' },
+  { num: '06', name: 'Электрика и освещение', desc: 'Архитектурная подсветка ландшафта' },
+  { num: '07', name: 'Геопластика', desc: 'Моделирование рельефа: холмы, террасы' },
 ]
 
+// Auto-grid for services: 4 cols top, 3 cols bottom (centered)
+const SVC_CARD = 140, SVC_GAP = 15
+const SVC_COLS = 4
+const svcGridW = SVC_COLS * SVC_CARD + (SVC_COLS - 1) * SVC_GAP // 605
+const svcGridLeft = (W - svcGridW) / 2 // ~117.5
+const SVC_START_Y = 1000
+function svcPos(idx: number): { x: number; y: number } {
+  if (idx < SVC_COLS) {
+    // First row — 4 cards
+    return { x: svcGridLeft + idx * (SVC_CARD + SVC_GAP), y: SVC_START_Y }
+  }
+  // Second row — 3 cards, centered
+  const row2Count = services.length - SVC_COLS
+  const row2W = row2Count * SVC_CARD + (row2Count - 1) * SVC_GAP
+  const row2Left = (W - row2W) / 2
+  const col = idx - SVC_COLS
+  return { x: row2Left + col * (SVC_CARD + SVC_GAP), y: SVC_START_Y + SVC_CARD + SVC_GAP }
+}
+
 const critItems = [
-  { col: 0, row: 0, label: 'Полив', sub: 'irrigation', hue: 120, val: 0.95 },
-  { col: 1, row: 0, label: 'Удобрения', sub: 'nutrition', hue: 80, val: 0.88 },
-  { col: 2, row: 0, label: 'Здоровье', sub: 'vitality', hue: 160, val: 0.92 },
-  { col: 0, row: 1, label: 'Дренаж', sub: 'drainage', hue: 200, val: 0.90 },
-  { col: 1, row: 1, label: 'Дизайн', sub: 'design fit', hue: 35, val: 0.85 },
-  { col: 2, row: 1, label: 'Освещение', sub: 'lighting', hue: 280, val: 0.87 },
+  { label: 'Полив', sub: 'irrigation', hue: 120, val: 0.95 },
+  { label: 'Удобрения', sub: 'nutrition', hue: 80, val: 0.88 },
+  { label: 'Здоровье', sub: 'vitality', hue: 160, val: 0.92 },
+  { label: 'Дренаж', sub: 'drainage', hue: 200, val: 0.90 },
+  { label: 'Дизайн', sub: 'design fit', hue: 35, val: 0.85 },
+  { label: 'Освещение', sub: 'lighting', hue: 280, val: 0.87 },
 ]
+// Crit grid: 3 cols × 2 rows, centered
+const CRIT_COL_W = 95, CRIT_GAP = 20
+const critGridW = 3 * CRIT_COL_W + 2 * CRIT_GAP
+const critGridLeft = (W - critGridW) / 2
+const CRIT_START_Y = 1460
+function critPos(idx: number): { x: number; y: number } {
+  const col = idx % 3, row = Math.floor(idx / 3)
+  return {
+    x: critGridLeft + col * (CRIT_COL_W + CRIT_GAP),
+    y: CRIT_START_Y + row * 115,
+  }
+}
 
 const compassDots: [number, number][] = Array.from({ length: 12 }, (_, i) => {
   const a = (i / 12) * Math.PI * 2 - Math.PI / 2
@@ -207,18 +239,6 @@ function App() {
   const handleMouseLeave = useCallback(() => {
     clearMousePosition()
   }, [])
-
-  // Направления: centered at x=220..620 (3 cols of 190 wide, gap 15)
-  const svcGridLeft = 220
-  const svcColW = 190
-  const svcGap = 15
-  const svcStartY = 1070
-
-  // Критерии: centered at x=240..600 (3 cols of 95 wide, gap 15)
-  const critGridLeft = 262
-  const critColW = 95
-  const critGap = 15
-  const critStartY = 1450
 
   return (
     <ThemeCtx.Provider value={{ dark, toggle }}>
@@ -414,7 +434,7 @@ function App() {
 
           {/* === Направления — CENTERED === */}
           <div style={{
-            position: 'absolute', left: 0, top: 975,
+            position: 'absolute', left: 0, top: 960,
             width: W, zIndex: 6,
             fontFamily: "'Cormorant Garamond', serif",
             fontSize: 32, fontWeight: 300, color: p.cream,
@@ -422,14 +442,13 @@ function App() {
             letterSpacing: '0.05em',
           }}>Направления</div>
 
-          {/* === SERVICE CARDS — centered grid, semi-transparent === */}
-          {services.map((s) => {
-            const x = svcGridLeft + s.col * (svcColW + svcGap)
-            const y = svcStartY + s.row * (svcColW + svcGap)
+          {/* === SERVICE CARDS — auto-grid, semi-transparent === */}
+          {services.map((s, i) => {
+            const pos = svcPos(i)
             return (
               <div key={s.num} style={{
-                position: 'absolute', left: x, top: y,
-                width: svcColW, height: svcColW,
+                position: 'absolute', left: pos.x, top: pos.y,
+                width: SVC_CARD, height: SVC_CARD,
                 borderRadius: 15, overflow: 'hidden', zIndex: 6,
                 background: p.cardBg,
                 backdropFilter: 'blur(4px)',
@@ -464,7 +483,7 @@ function App() {
 
           {/* === Критерии качества — CENTERED === */}
           <div style={{
-            position: 'absolute', left: 0, top: 1370,
+            position: 'absolute', left: 0, top: 1400,
             width: W, zIndex: 6,
             fontFamily: "'Cormorant Garamond', serif",
             fontSize: 32, fontWeight: 300, color: p.cream,
@@ -473,12 +492,11 @@ function App() {
           }}>Критерии качества</div>
 
           {critItems.map((c, i) => {
-            const x = critGridLeft + c.col * (critColW + critGap)
-            const y = critStartY + c.row * 110
+            const pos = critPos(i)
             return (
               <div key={`crit${i}`} style={{
-                position: 'absolute', left: x, top: y,
-                width: critColW, height: 108, zIndex: 6, textAlign: 'center',
+                position: 'absolute', left: pos.x, top: pos.y,
+                width: CRIT_COL_W, height: 108, zIndex: 6, textAlign: 'center',
               }}>
                 <CritRing hue={c.hue} val={c.val} size={80} />
                 <div style={{
@@ -493,9 +511,9 @@ function App() {
             )
           })}
 
-          {/* === Diamond === */}
+          {/* === Diamond (top point at 420, 1720 — road arrives here) === */}
           <div style={{
-            position: 'absolute', left: 200, top: 1560,
+            position: 'absolute', left: 200, top: 1720,
             width: 440, height: 440,
             background: p.diamond,
             transform: 'rotate(45deg)',
@@ -506,7 +524,7 @@ function App() {
 
           {/* === Contact text === */}
           <div style={{
-            position: 'absolute', left: 219, top: 1695,
+            position: 'absolute', left: 219, top: 1855,
             width: 402, height: 130, zIndex: 6,
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center', textAlign: 'center',
@@ -524,7 +542,7 @@ function App() {
 
           {/* === СВЯЗАТЬСЯ — marble monolith, NO border-radius === */}
           <div style={{
-            position: 'absolute', left: 300, top: 1830,
+            position: 'absolute', left: 300, top: 1990,
             width: 240, zIndex: 6,
             display: 'flex', flexDirection: 'column',
             alignItems: 'center',
@@ -542,7 +560,6 @@ function App() {
                 inset 0 -1px 0 rgba(0,0,0,0.1)
               `,
               transition: 'all 0.8s ease',
-              // Marble veining via repeating gradients
               backgroundImage: `
                 ${p.marbleBg},
                 repeating-linear-gradient(
@@ -588,8 +605,8 @@ function App() {
 
           {/* === Philosophy quote === */}
           <div style={{
-            position: 'absolute', left: 161.56, top: 2070,
-            width: 516.87, height: 260, zIndex: 6,
+            position: 'absolute', left: 161.56, top: 2180,
+            width: 516.87, height: 200, zIndex: 6,
             display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center',
           }}>
             <p style={{

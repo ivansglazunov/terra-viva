@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="440" viewBox="0 0 400 440" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="leafWaterGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#3a7a32"/>
+      <stop offset="35%" stop-color="#2d5a27"/>
+      <stop offset="65%" stop-color="#2a6a5a"/>
+      <stop offset="100%" stop-color="#4a8ab0"/>
+    </linearGradient>
+    <radialGradient id="highlight" cx="0.35" cy="0.3" r="0.5">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <path d="
+    M 200 20
+    C 250 58, 305 110, 310 175
+    C 315 230, 308 268, 285 305
+    C 262 342, 235 368, 220 388
+    Q 210 405, 200 422
+    Q 190 405, 180 388
+    C 165 368, 138 342, 115 305
+    C 92 268, 85 230, 90 175
+    C 95 110, 150 58, 200 20
+    Z
+  " fill="url(#leafWaterGrad)"/>
+
+  <path d="
+    M 200 20
+    C 250 58, 305 110, 310 175
+    C 315 230, 308 268, 285 305
+    C 262 342, 235 368, 220 388
+    Q 210 405, 200 422
+    Q 190 405, 180 388
+    C 165 368, 138 342, 115 305
+    C 92 268, 85 230, 90 175
+    C 95 110, 150 58, 200 20
+    Z
+  " fill="url(#highlight)"/>
+
+  <path d="M 200 48 L 200 395" stroke="#ffffff" stroke-width="2" opacity="0.3" fill="none" stroke-linecap="round"/>
+
+  <path d="M 200 105 Q 168 122, 132 150" stroke="#fff" stroke-width="1.5" opacity="0.2" fill="none" stroke-linecap="round"/>
+  <path d="M 200 165 Q 162 185, 120 208" stroke="#fff" stroke-width="1.5" opacity="0.2" fill="none" stroke-linecap="round"/>
+  <path d="M 200 225 Q 166 242, 112 258" stroke="#fff" stroke-width="1.3" opacity="0.15" fill="none" stroke-linecap="round"/>
+
+  <path d="M 200 105 Q 232 122, 268 150" stroke="#fff" stroke-width="1.5" opacity="0.2" fill="none" stroke-linecap="round"/>
+  <path d="M 200 165 Q 238 185, 280 208" stroke="#fff" stroke-width="1.5" opacity="0.2" fill="none" stroke-linecap="round"/>
+  <path d="M 200 225 Q 234 242, 288 258" stroke="#fff" stroke-width="1.3" opacity="0.15" fill="none" stroke-linecap="round"/>
+
+  <path d="M 128 298 Q 165 290, 200 295 Q 235 300, 272 292" stroke="#fff" stroke-width="1" opacity="0.12" fill="none"/>
+  <path d="M 140 320 Q 170 313, 200 317 Q 230 321, 260 314" stroke="#fff" stroke-width="0.8" opacity="0.1" fill="none"/>
+  <path d="M 158 342 Q 178 337, 200 340 Q 222 343, 242 338" stroke="#fff" stroke-width="0.6" opacity="0.08" fill="none"/>
+
+  <ellipse cx="200" cy="410" rx="6" ry="9" fill="#ffffff" opacity="0.15"/>
+</svg>

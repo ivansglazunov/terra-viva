@@ -103,8 +103,10 @@ const stream: [number, number][] = [
   [80, 730], [80, 660], [110, 580], [180, 530], [260, 510],
   [340, 490], [440, 500], [528, 526],
 ]
-const branchL: [number, number][] = [[-540, 775], [-260, 655], [32, 665]]
-const branchR: [number, number][] = [[790, 930], [1070, 810], [1362, 820]]
+// Branch left starts from main road near lake area (~y=560, organic section)
+const branchL: [number, number][] = [[-540, 620], [-260, 580], [20, 560]]
+// Branch right starts from main road at the corner before Направления (720, 950)
+const branchR: [number, number][] = [[720, 950], [1070, 860], [1362, 870]]
 
 const leftTrees = [
   { x: 100, y: 20, s: 80 }, { x: 10, y: 40, s: 120 },
@@ -166,14 +168,19 @@ const compassDots: [number, number][] = Array.from({ length: 12 }, (_, i) => {
 // Center: (420, 2091), Top visual tip: (420, ~1780)
 const DIAMOND_TOP = 1871
 
-// Lantern positions around diamond
+// Lantern positions: inside diamond, ~70px inset from edges
+// Diamond center (420, 2091), half-diagonal ~311px, inset 70px → ~241px from center
+// Corners (top, right, bottom, left) + mid-edges (4 more) = 8 lanterns
+const DIA_CX = 420, DIA_CY = 2091, DIA_INS = 190
 const lanternPositions = [
-  { x: 210, y: 1920 },
-  { x: 630, y: 1920 },
-  { x: 90, y: 2091 },
-  { x: 750, y: 2091 },
-  { x: 210, y: 2260 },
-  { x: 630, y: 2260 },
+  { x: DIA_CX, y: DIA_CY - DIA_INS },              // top
+  { x: DIA_CX + DIA_INS, y: DIA_CY },              // right
+  { x: DIA_CX, y: DIA_CY + DIA_INS },              // bottom
+  { x: DIA_CX - DIA_INS, y: DIA_CY },              // left
+  { x: DIA_CX + DIA_INS * 0.55, y: DIA_CY - DIA_INS * 0.55 }, // top-right
+  { x: DIA_CX + DIA_INS * 0.55, y: DIA_CY + DIA_INS * 0.55 }, // bottom-right
+  { x: DIA_CX - DIA_INS * 0.55, y: DIA_CY + DIA_INS * 0.55 }, // bottom-left
+  { x: DIA_CX - DIA_INS * 0.55, y: DIA_CY - DIA_INS * 0.55 }, // top-left
 ]
 
 function CritRing({ hue, val, size = 80 }: { hue: number; val: number; size?: number }) {
@@ -309,7 +316,14 @@ function App() {
   const [dark, setDark] = useState(true)
   const [scale, setScale] = useState(1)
   const [lanternsLit, setLanternsLit] = useState(false)
+  const [lanternsHover, setLanternsHover] = useState(false)
+  const [roadProgress, setRoadProgress] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const roadRef = useRef<SVGPathElement>(null)
+  const branchLRef = useRef<SVGPathElement>(null)
+  const branchRRef = useRef<SVGPathElement>(null)
+  const forkRightRef = useRef<SVGPathElement>(null)
+  const forkDownRef = useRef<SVGPathElement>(null)
 
   const toggle = () => setDark(d => !d)
   const p = dark ? palette.dark : palette.light
@@ -324,6 +338,47 @@ function App() {
     window.addEventListener('resize', resize)
     return () => window.removeEventListener('resize', resize)
   }, [])
+
+  // Scroll-based road reveal + lantern activation
+  useEffect(() => {
+    const onScroll = () => {
+      const scrollY = window.scrollY
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight
+      const progress = maxScroll > 0 ? Math.min(1, scrollY / maxScroll) : 0
+      setRoadProgress(progress)
+
+      // Check if СВЯЗАТЬСЯ button is in 30% middle of viewport
+      const contactTop = (DIAMOND_TOP + 220) * scale
+      const viewH = window.innerHeight
+      const mid30Top = viewH * 0.35
+      const mid30Bottom = viewH * 0.65
+      const contactInView = contactTop - scrollY > mid30Top && contactTop - scrollY < mid30Bottom
+      if (contactInView && !lanternsHover) {
+        setLanternsLit(true)
+      } else if (!lanternsHover && !contactInView) {
+        setLanternsLit(false)
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [scale, lanternsHover])
+
+  // Apply stroke-dashoffset animation to road paths
+  useEffect(() => {
+    const applyDash = (ref: React.RefObject<SVGPathElement | null>, delay: number) => {
+      const el = ref.current
+      if (!el) return
+      const len = el.getTotalLength()
+      el.style.strokeDasharray = `${len}`
+      el.style.strokeDashoffset = `${len * (1 - Math.min(1, Math.max(0, (roadProgress - delay) / (1 - delay))))}`
+    }
+    applyDash(roadRef, 0)
+    applyDash(branchLRef, 0.15)
+    applyDash(branchRRef, 0.25)
+    applyDash(forkRightRef, 0.75)
+    applyDash(forkDownRef, 0.75)
+  }, [roadProgress])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const container = containerRef.current
@@ -417,35 +472,44 @@ function App() {
               </pattern>
             </defs>
 
-            {/* Main road — organic + geometric */}
-            <path d={fullRoadD} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            {/* Main road — organic + geometric, drawn on scroll */}
+            <path ref={roadRef} d={fullRoadD} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
 
             {/* Fork: right branch off-screen */}
-            <path d="M 420 1740 L 1100 1740" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" />
+            <path ref={forkRightRef} d="M 420 1740 L 1100 1740" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
 
             {/* Fork: down to diamond tip */}
-            <path d="M 420 1740 L 420 1800" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" />
+            <path ref={forkDownRef} d="M 420 1740 L 420 1800" stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
 
             {/* Branch roads */}
-            <path d={pts2path(branchL)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
-            <path d={pts2path(branchR)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} />
+            <path ref={branchLRef} d={pts2path(branchL)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
+            <path ref={branchRRef} d={pts2path(branchR)} stroke="url(#stonePat)" strokeWidth={34} fill="none" strokeLinecap="round" opacity={0.7} style={{ transition: 'stroke-dashoffset 0.1s linear' }} />
 
             {/* Stream */}
             <path d={pts2path(stream)} stroke={dark ? '#8a9aaa' : '#a0b4c8'} strokeWidth={14} fill="none" strokeLinecap="round" opacity={dark ? 0.12 : 0.25} />
           </svg>
 
-          {/* === HERO: Roof tiles + TERRA VIVA === */}
+          {/* === HERO: Logo + Roof + TERRA VIVA === */}
+          {/* Logo sitting on top of the roof */}
           <div style={{
-            position: 'absolute', left: 379.75, top: 0,
-            width: 68.5, height: 68.5,
-            background: dark ? '#1a1008' : '#3a2818',
-            zIndex: 5,
-          }} />
+            position: 'absolute',
+            left: 160, top: 0,
+            width: 520, height: 80,
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            zIndex: 7, pointerEvents: 'none',
+          }}>
+            <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Terra Viva" style={{
+              height: 160, width: 'auto',
+              filter: 'drop-shadow(0 6px 20px rgba(0,0,0,0.4))',
+              marginBottom: -90,
+            }} />
+          </div>
+          {/* Roof with shadow */}
           <div style={{
             position: 'absolute', left: 160, top: 68.5,
             width: 520, height: 280,
             borderRadius: 15, overflow: 'hidden', zIndex: 5,
-            boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
+            boxShadow: '0 18px 50px rgba(0,0,0,0.5), 0 8px 20px rgba(0,0,0,0.3)',
           }}>
             <AnimatedTexture type="roof" density={16} />
             <div style={{
@@ -468,6 +532,13 @@ function App() {
               }}>живая земля · ландшафтная архитектура</div>
             </div>
           </div>
+          {/* Roof shadow on grass below */}
+          <div style={{
+            position: 'absolute', left: 150, top: 348,
+            width: 540, height: 30,
+            background: 'radial-gradient(ellipse 100% 100%, rgba(0,0,0,0.25) 0%, transparent 70%)',
+            zIndex: 4, borderRadius: '50%',
+          }} />
 
           {/* === TREES === */}
           {[...leftTrees, ...rightTrees].map((t, i) => (
@@ -695,8 +766,8 @@ function App() {
               display: 'flex', flexDirection: 'column',
               alignItems: 'center',
             }}
-            onMouseEnter={() => setLanternsLit(true)}
-            onMouseLeave={() => setLanternsLit(false)}
+            onMouseEnter={() => { setLanternsHover(true); setLanternsLit(true) }}
+            onMouseLeave={() => { setLanternsHover(false) }}
           >
             <a href="tel:+79263207755" style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -750,7 +821,7 @@ function App() {
 
           {/* === Philosophy quote === */}
           <div style={{
-            position: 'absolute', left: 161.56, top: DIAMOND_TOP + 440,
+            position: 'absolute', left: 161.56, top: DIAMOND_TOP + 520,
             width: 516.87, height: 200, zIndex: 6,
             display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center',
           }}>

@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=Inter:wght@300;400;500&display=swap');
+
+:root {
+  --moss: #4a8c3f;
+  --moss-dark: #336600;
+  --tree: #428200;
+  --stone: #d4c5a0;
+  --stone-light: #efe8d8;
+  --water: #A9C4EB;
+  --earth: #663300;
+  --cream: #f7f2ea;
+  --bg-dark: #1a3300;
+  --bg-green: #336600;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-dark);
+  color: var(--cream);
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  position: relative;
+}
+
+h1, h2, h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 300;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}

@@ -5,7 +5,7 @@ import './App.css'
 
 const ThemeCtx = createContext<{ dark: boolean; toggle: () => void }>({ dark: true, toggle: () => {} })
 
-const W = 840, H = 2650
+const W = 840, H = 2750
 
 const palette = {
   light: {
